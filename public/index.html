@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fisher Poster Studio</title>
+<style>
+html,body{margin:0}
+body{background:#f6f7f9;color:#1f2933;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit}
+.hidden{display:none!important}
+
+/* ---------------- studio (builder) ---------------- */
+#studio{max-width:760px;margin:0 auto;padding:48px 20px 96px}
+#studio h1{font-size:28px;font-weight:650;margin:0 0 8px;letter-spacing:-.01em;color:#111827}
+#studio .lede{font-size:16px;line-height:1.6;color:#4b5563;margin:0 0 28px}
+#studio a{color:#2563eb}
+.notice{border:1px solid #dbe3ee;background:#eef4ff;border-radius:10px;padding:14px 16px;font-size:14.5px;line-height:1.6;margin:0 0 20px;color:#1e3a5f}
+.notice.warn{border-color:#f3dfa8;background:#fff8e6;color:#6b4e00}
+.notice.err{border-color:#f5c2c2;background:#fdf0f0;color:#8a1f1f}
+.notice b{font-weight:600}
+.step{background:#fff;border:1px solid #e5e7eb;border-radius:14px;margin:0 0 16px;padding:22px 24px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.step h2{margin:0 0 6px;font-size:18px;font-weight:600;display:flex;gap:10px;align-items:center;color:#111827}
+.step h2 .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#111827;color:#fff;font-size:13px;font-weight:600}
+.step .sub{font-size:14.5px;color:#6b7280;margin:0 0 16px;line-height:1.6}
+label.f{display:block;font-size:14px;font-weight:500;margin:14px 0 6px;color:#374151}
+input[type=text]{width:100%;font:inherit;font-size:15px;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;transition:border-color .15s, box-shadow .15s}
+input[type=text]:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.drop{border:1.5px dashed #cbd5e1;border-radius:10px;padding:22px;text-align:center;font-size:14.5px;color:#4b5563;cursor:pointer;background:#fafbfc;transition:border-color .15s, background .15s}
+.drop:hover,.drop.over{border-color:#2563eb;background:#f3f7ff}
+.btn{font-size:15px;font-weight:600;background:#111827;color:#fff;border:1px solid #111827;border-radius:8px;padding:10px 18px;cursor:pointer;transition:background .15s}
+.btn:hover:not(:disabled){background:#1f2937}
+.btn.sec{background:#fff;color:#374151;border-color:#d1d5db;font-weight:500}
+.btn.sec:hover:not(:disabled){background:#f3f4f6}
+.btn.small{font-size:13px;padding:5px 11px;border-radius:7px}
+.btn:disabled{opacity:.4;cursor:default}
+.ok{color:#0f8a4b}
+.bad{color:#c2410c}
+.clip{border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:12px 0 0;background:#fafbfc}
+.clip .top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;margin-bottom:10px;color:#374151}
+.clip video,.clip audio{width:100%;max-height:220px;display:block;border-radius:8px}
+.clip video{background:#000}
+.clip .trim{display:grid;grid-template-columns:auto 84px auto auto 84px auto 1fr;gap:8px;align-items:center;margin-top:12px;font-size:13.5px;color:#4b5563}
+.clip .trim input{width:84px;font:inherit;font-size:14px;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:7px;padding:5px 8px}
+.clip .trim .prep{background:#2563eb;border-color:#2563eb}
+.clip .trim .prep:hover:not(:disabled){background:#1d4ed8}
+.clip .state{font-size:13.5px;margin-top:10px;color:#4b5563}
+.meter{height:8px;background:#e5e7eb;border-radius:99px;margin:10px 0 6px;position:relative;overflow:hidden}
+.meter i{position:absolute;top:0;bottom:0;left:0;background:#16a34a;border-radius:99px}
+.meter .band{position:absolute;top:0;bottom:0;background:rgba(22,163,74,.14)}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;line-height:1.55;margin-top:18px;color:#374151}
+.consent input{margin-top:3px;width:17px;height:17px;accent-color:#2563eb}
+#log{font-size:14.5px;line-height:1.9;margin-top:16px}
+#log .s{color:#9ca3af}#log .s.on{color:#1d4ed8;font-weight:500}#log .s.done{color:#0f8a4b}#log .s.fail{color:#c2410c;font-weight:500}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.gal a{display:block;border:1px solid #e5e7eb;border-radius:10px;padding:14px;text-decoration:none;color:#111827;background:#fff;transition:border-color .15s, box-shadow .15s}
+.gal a:hover{border-color:#93c5fd;box-shadow:0 2px 8px rgba(16,24,40,.06)}
+.gal .t{font-size:14.5px;font-weight:500;line-height:1.4;margin-bottom:6px}
+.gal .w{font-size:13px;color:#6b7280}
+code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px 6px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+.muted{font-size:13.5px;color:#6b7280}
+.vcs{margin-left:auto;font-size:13px;font-weight:500;padding:3px 10px;border-radius:99px;background:#f3f4f6;color:#6b7280}
+.vcs.ok{background:#e7f6ee;color:#0f8a4b}.vcs.no{background:#fff4e5;color:#b45309}
+.howto{margin:0;padding-left:22px;font-size:14.5px;line-height:1.75;color:#374151}
+.howto li{padding-left:4px}
+.howto .btn.small{margin-left:6px;vertical-align:1px}
+#s0.done{padding-top:16px;padding-bottom:16px}
+
+
+#gate .row input{flex:1;min-width:180px}
+#gate .err{color:#c2410c;font-size:14px;margin-top:10px}
+.topbar{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.topbar a{font-size:13.5px}
+</style>
+</head>
+<body>
+<div id="studio">
+ <div class="topbar"><h1>Fisher Poster Studio</h1><a href="#" id="signout" class="hidden">Sign out</a></div>
+ <p class="lede">Turn one of your papers into an interactive poster. Visitors click a panel to zoom in and hear you explain it, in an AI version of your own voice, and can ask an AI version of you questions about the paper.</p>
+
+ <div id="envnote" class="notice hidden"></div>
+
+ <!-- invite gate -->
+ <div class="step" id="gate">
+  <h2>Enter your invite code</h2>
+  <p class="sub">You'll find it in your invitation email.</p>
+  <form class="row" id="gateform"><input type="text" id="code" placeholder="e.g. fisher-xxxxxxxx" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="gatebtn">Continue</button></form>
+  <div class="err hidden" id="gateerr"></div>
+ </div>
+
+ <div id="app" class="hidden">
+  <div class="notice"><b>Early version.</b> Once a poster is made it cannot be edited yet. To change it, build it again (your new poster replaces the old one).</div>
+  <div id="mine" class="notice hidden"></div>
+
+  <div class="step" id="s1">
+   <h2><span class="n">1</span>Your paper</h2>
+   <p class="sub">Upload the PDF of the published paper. AI reads it, including tables and figures, and drafts the poster panels and your narration scripts.</p>
+   <div class="drop" id="pdfdrop">Drop a PDF here, or click to choose<input type="file" id="pdfin" accept="application/pdf,.pdf" class="hidden"></div>
+   <div id="pdfstate" class="muted" style="margin-top:10px"></div>
+  </div>
+
+  <div class="step" id="s2">
+   <h2><span class="n">2</span>About you</h2>
+   <label class="f" for="dname" style="margin-top:0">Your name as shown on the poster (e.g., Prof. Jane Doe)</label>
+   <input type="text" id="dname" maxlength="80" autocomplete="name">
+  </div>
+
+  <div class="step" id="s3">
+   <h2><span class="n">3</span>Your voice</h2>
+   <p class="sub">Add audio or video of <b>you</b> speaking: a lecture recording, a talk, or a voice memo. Use parts where only you are talking (no students, music or applause). Aim for 1 to 3 minutes in total; 30 seconds is the minimum and 5 minutes the maximum. Long files are fine: trim each one to the part you want, and the studio compresses it before sending.</p>
+   <div class="drop" id="voicedrop">Drop audio/video files here, or click to choose (you can add several)<input type="file" id="voicein" accept="audio/*,video/*,.mp3,.m4a,.wav,.aac,.mp4,.mov,.webm,.ogg" multiple class="hidden"></div>
+   <div id="clips"></div>
+   <div style="margin-top:18px;font-size:14.5px;color:#374151">Prepared voice: <b id="totlen">0:00</b> <span id="totmsg" class="bad">— add at least 0:30</span></div>
+   <div class="meter"><span class="band" style="left:20%;width:40%"></span><i id="totbar" style="width:0"></i></div>
+   <div style="display:flex;justify-content:space-between;font-size:12px;color:#9ca3af"><span>0:00</span><span>recommended 1:00–3:00</span><span>5:00</span></div>
+   <label class="consent"><input type="checkbox" id="consent"><span>This is my own voice, and I agree to an AI voice clone of me being created with ElevenLabs and used to narrate my poster.</span></label>
+  </div>
+
+  <div class="step" id="s4">
+   <h2><span class="n">4</span>Build</h2>
+   <p class="sub">Takes a few minutes. Keep this page open.</p>
+   <button class="btn" id="build" disabled>Build my poster</button>
+   <span id="buildwhy" class="muted" style="margin-left:12px"></span>
+   <div id="log" class="hidden">
+    <div class="s" data-k="poster">1. Reading the paper and drafting the poster</div>
+    <div class="s" data-k="sample">2. Preparing your voice sample</div>
+    <div class="s" data-k="clone">3. Creating your voice clone</div>
+    <div class="s" data-k="narr">4. Recording narration <span id="narrn"></span></div>
+    <div class="s" data-k="save">5. Saving your poster</div>
+   </div>
+   <div id="builderr" class="notice err hidden" style="margin-top:12px"></div>
+   <div id="builddone" class="notice hidden" style="margin-top:12px"></div>
+  </div>
+ </div>
+
+ <div class="step">
+  <h2>Posters in the studio</h2>
+  <div id="gallery" class="gal"><span class="muted">Loading…</span></div>
+ </div>
+</div>
+
+<script src="/lib/lame.min.js"></script>
+<script>
+(()=>{
+"use strict";
+const SECTIONS=["narrative","findings","methods","takeaway"];
+const MIN_VOICE=30, MAX_VOICE=300, REC_LO=60, REC_HI=180;
+const DECODE_MAX_SECONDS=600;
+const MAX_PDF=30*1024*1024;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=t=>{t=Math.max(0,Math.round(t||0));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");};
+const parseT=s=>{s=String(s||"").trim();if(!s)return NaN;if(s.includes(":")){const [m,x]=s.split(":");return (+m)*60+(+x);}return +s;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let building=false, paperFile=null;
+
+/* ---------- API ---------- */
+async function call(path,opts={}){
+  let res;
+  try{res=await fetch(path,Object.assign({credentials:"same-origin"},opts));}
+  catch(e){throw {message:"Network problem. Check your connection and try again."};}
+  const txt=(await res.text()).trim();let data={};
+  try{data=txt?JSON.parse(txt):{};}catch(e){throw {message:"The server sent an unexpected reply ("+res.status+")."};}
+  if(data.error){const e=data.error;e.status=res.status;throw e;}
+  if(!res.ok)throw {message:"Request failed ("+res.status+")."};
+  return data;
+}
+
+/* ---------- invite gate ---------- */
+async function refreshMe(){
+  let me={ok:false};try{me=await call("/api/me");}catch(e){}
+  $("gate").classList.toggle("hidden",me.ok);$("app").classList.toggle("hidden",!me.ok);$("signout").classList.toggle("hidden",!me.ok);
+  const m=$("mine");
+  if(me.mine){m.innerHTML="";m.append("You already have a poster: ");const a=document.createElement("a");a.href="/p/"+me.mine.slug;a.textContent=me.mine.title;m.append(a,". Building again replaces it.");m.classList.remove("hidden");}
+  else m.classList.add("hidden");
+  check();
+}
+$("gateform").addEventListener("submit",async e=>{
+  e.preventDefault();const code=$("code").value.trim();if(!code)return;
+  $("gatebtn").disabled=true;$("gateerr").classList.add("hidden");
+  try{await call("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code})});await refreshMe();}
+  catch(err){$("gateerr").textContent=err.message||"Something went wrong.";$("gateerr").classList.remove("hidden");}
+  $("gatebtn").disabled=false;
+});
+$("signout").onclick=async e=>{e.preventDefault();try{await call("/api/logout",{method:"POST"});}catch(x){}refreshMe();};
+
+/* ---------- paper ---------- */
+function pick(drop,input,fn){
+  drop.addEventListener("click",()=>input.click());
+  input.addEventListener("change",()=>{if(input.files.length)fn([...input.files]);input.value="";});
+  drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
+  drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+  drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");if(e.dataTransfer.files.length)fn([...e.dataTransfer.files]);});
+}
+pick($("pdfdrop"),$("pdfin"),files=>{
+  const f=files[0],st=$("pdfstate");paperFile=null;
+  if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name))st.innerHTML='<span class="bad">That is not a PDF.</span>';
+  else if(f.size>MAX_PDF)st.innerHTML='<span class="bad">That PDF is larger than 30 MB.</span>';
+  else{paperFile=f;st.innerHTML='<span class="ok">✓</span> '+esc(f.name)+' · '+(f.size/1048576).toFixed(1)+' MB';}
+  check();
+});
+
+/* ============================ STUDIO: VOICE CLIPS ============================ */
+const clips=[]; let clipSeq=0;
+pick($("voicedrop"),$("voicein"),files=>files.forEach(addClip));
+function addClip(file){
+  if(!/^(audio|video)\//.test(file.type)&&!/\.(mp3|m4a|wav|aac|mp4|mov|webm|ogg)$/i.test(file.name)){alert0(file.name+" is not an audio or video file.");return;}
+  const c={id:++clipSeq,file,url:URL.createObjectURL(file),dur:0,start:0,end:0,pcm:null,state:"new"};
+  const isV=/^video\//.test(file.type)||/\.(mp4|mov|webm)$/i.test(file.name);
+  const el=document.createElement("div");el.className="clip";
+  el.innerHTML=`<div class="top"><span class="nm"></span><button class="btn sec small rm" type="button">Remove</button></div>
+   <${isV?"video":"audio"} controls preload="metadata"></${isV?"video":"audio"}>
+   <div class="trim"><span>Start</span><input class="ts" placeholder="m:ss"><button class="btn sec small ss" type="button">◀ now</button>
+   <span>End</span><input class="te" placeholder="m:ss"><button class="btn sec small se" type="button">◀ now</button>
+   <button class="btn small prep" type="button" style="justify-self:end">Use this part</button></div>
+   <div class="state"></div>`;
+  el.querySelector(".nm").textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";
+  const media=el.querySelector("video,audio"); media.src=c.url; c.el=el; c.media=media;
+  const ts=el.querySelector(".ts"),te=el.querySelector(".te"),state=el.querySelector(".state");
+  const sync=()=>{c.start=parseT(ts.value);c.end=parseT(te.value);if(c.pcm){c.pcm=null;c.state="new";}draw();};
+  const draw=()=>{
+    const len=c.end-c.start;
+    if(c.state==="busy") return;
+    if(c.pcm){state.innerHTML='<span class="ok">✓ Ready</span> · '+fmt(c.pcm.length/44100)+' of your voice';}
+    else if(!(c.dur>0)) state.textContent="Loading…";
+    else if(!(len>0)||c.start<0||c.end>c.dur+0.5) state.innerHTML='<span class="bad">Set a start and end inside 0:00–'+fmt(c.dur)+'.</span>';
+    else state.innerHTML='Selected '+fmt(len)+'. Press <b>Use this part</b> to prepare it.'+(c.dur>DECODE_MAX_SECONDS?' (Long file: it plays the selected part silently in real time, so this takes '+fmt(len)+'.)':'');
+    updTotal();
+  };
+  c.draw=draw;
+  media.addEventListener("loadedmetadata",()=>{c.dur=media.duration;if(!isFinite(c.dur))c.dur=0;if(!ts.value){ts.value="0:00";te.value=fmt(Math.min(c.dur,180));}sync();});
+  media.addEventListener("error",()=>{state.innerHTML='<span class="bad">This browser cannot play this file. Try converting it to MP3 or MP4 first.</span>';});
+  ts.addEventListener("change",sync);te.addEventListener("change",sync);
+  el.querySelector(".ss").onclick=()=>{ts.value=fmt(media.currentTime);sync();};
+  el.querySelector(".se").onclick=()=>{te.value=fmt(media.currentTime);sync();};
+  el.querySelector(".rm").onclick=()=>{const i=clips.indexOf(c);if(i>=0)clips.splice(i,1);try{media.pause();}catch(e){}URL.revokeObjectURL(c.url);el.remove();updTotal();};
+  el.querySelector(".prep").onclick=async()=>{
+    const len=c.end-c.start; if(!(len>0)||c.start<0||c.end>c.dur+0.5){draw();return;}
+    if(len>MAX_VOICE){state.innerHTML='<span class="bad">Keep each part under 5:00.</span>';return;}
+    c.state="busy";el.querySelector(".prep").disabled=true;
+    try{
+      c.pcm=await extractMono(c,(t)=>{state.textContent=t;});
+      c.state="ready";
+    }catch(e){c.pcm=null;c.state="new";state.innerHTML='<span class="bad">Could not prepare this part: '+esc(e.message||e)+'</span>';el.querySelector(".prep").disabled=false;updTotal();return;}
+    el.querySelector(".prep").disabled=false;draw();
+  };
+  $("clips").appendChild(el);clips.push(c);updTotal();
+}
+function alert0(t){const s=$("envnote");s.className="notice warn";s.textContent=t;setTimeout(()=>s.classList.add("hidden"),6000);}
+function voiceSeconds(){return clips.reduce((a,c)=>a+(c.pcm?c.pcm.length/44100:0),0);}
+function updTotal(){
+  const t=voiceSeconds();$("totlen").textContent=fmt(t);
+  $("totbar").style.width=Math.min(100,100*t/MAX_VOICE)+"%";
+  const m=$("totmsg");
+  if(t<MIN_VOICE){m.className="bad";m.textContent="— add at least 0:30";}
+  else if(t>MAX_VOICE){m.className="bad";m.textContent="— over 5:00, trim some parts";}
+  else if(t<REC_LO||t>REC_HI){m.className="";m.style.color="#b45309";m.textContent="— works, but 1:00–3:00 usually sounds best";}
+  else {m.className="ok";m.style.color="";m.textContent="— good";}
+  check();
+}
+
+
+/* ---- audio: decode or live-capture a segment, return mono Float32 @ 44.1 kHz ---- */
+async function toMono44(buf,start,len){
+  const sr=44100,n=Math.max(1,Math.ceil(len*sr));
+  const off=new OfflineAudioContext(1,n,sr);const src=off.createBufferSource();src.buffer=buf;src.connect(off.destination);src.start(0,start,len);
+  return (await off.startRendering()).getChannelData(0);
+}
+async function extractMono(c,status){
+  const len=c.end-c.start;
+  if(c.dur<=DECODE_MAX_SECONDS){
+    try{
+      status("Decoding…");
+      const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();
+      const buf=await ctx.decodeAudioData(await c.file.arrayBuffer());ctx.close&&ctx.close();
+      status("Trimming…");
+      return normalize(await toMono44(buf,c.start,Math.min(len,buf.duration-c.start)));
+    }catch(e){ /* fall through to live capture */ }
+  }
+  return normalize(await liveCapture(c,status));
+}
+async function liveCapture(c,status){
+  const len=c.end-c.start;
+  const isV=c.media.tagName==="VIDEO";const el=document.createElement(isV?"video":"audio");
+  el.src=c.url;el.preload="auto";el.muted=false;el.volume=1;
+  const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();
+  const src=ctx.createMediaElementSource(el);const proc=ctx.createScriptProcessor(4096,2,1);const g=ctx.createGain();g.gain.value=0;
+  src.connect(proc);proc.connect(g);g.connect(ctx.destination);
+  const parts=[];let got=0;
+  proc.onaudioprocess=e=>{if(el.paused||el.currentTime<c.start)return;const ib=e.inputBuffer,n=ib.length,ch=ib.numberOfChannels;const m=new Float32Array(n);for(let k=0;k<ch;k++){const d=ib.getChannelData(k);for(let i=0;i<n;i++)m[i]+=d[i]/ch;}parts.push(m);got+=n;};
+  await new Promise((res,rej)=>{el.addEventListener("loadedmetadata",res,{once:true});el.addEventListener("error",()=>rej(new Error("cannot open file")),{once:true});});
+  el.currentTime=c.start;await new Promise(r=>el.addEventListener("seeked",r,{once:true}));
+  if(ctx.state==="suspended")await ctx.resume();
+  await el.play();
+  await new Promise(res=>{const t=setInterval(()=>{status("Capturing… "+fmt(el.currentTime-c.start)+" / "+fmt(len));if(el.currentTime>=c.end||el.ended){clearInterval(t);res();}},250);});
+  el.pause();proc.disconnect();src.disconnect();
+  const sr=ctx.sampleRate;ctx.close&&ctx.close();
+  const all=new Float32Array(got);let o=0;for(const p of parts){all.set(p,o);o+=p.length;}
+  const ab=new AudioBuffer({length:Math.max(1,all.length),numberOfChannels:1,sampleRate:sr});ab.copyToChannel(all,0);
+  status("Finishing…");
+  return toMono44(ab,0,ab.duration);
+}
+function normalize(x){let pk=0;for(let i=0;i<x.length;i++){const a=Math.abs(x[i]);if(a>pk)pk=a;}const k=pk>0.01?Math.min(4,0.89/pk):1;if(k!==1)for(let i=0;i<x.length;i++)x[i]*=k;return x;}
+function encodeMp3(pcm,sr,kbps){
+  const enc=new lamejs.Mp3Encoder(1,sr,kbps);const out=[];const B=1152;const i16=new Int16Array(B);
+  for(let i=0;i<pcm.length;i+=B){const n=Math.min(B,pcm.length-i);const blk=n===B?i16:new Int16Array(n);for(let j=0;j<n;j++){const v=Math.max(-1,Math.min(1,pcm[i+j]));blk[j]=v<0?v*32768:v*32767;}const m=enc.encodeBuffer(blk);if(m.length)out.push(new Uint8Array(m));}
+  const e=enc.flush();if(e.length)out.push(new Uint8Array(e));
+  return new Blob(out,{type:"audio/mpeg"});
+}
+async function resample(pcm,to){const ab=new AudioBuffer({length:pcm.length,numberOfChannels:1,sampleRate:44100});ab.copyToChannel(pcm,0);const n=Math.ceil(pcm.length*to/44100);const off=new OfflineAudioContext(1,n,to);const s=off.createBufferSource();s.buffer=ab;s.connect(off.destination);s.start();return (await off.startRendering()).getChannelData(0);}
+function joinClips(){const gap=new Float32Array(Math.round(0.4*44100));const ps=[];clips.forEach(c=>{if(c.pcm){if(ps.length)ps.push(gap);ps.push(c.pcm);}});const n=ps.reduce((a,p)=>a+p.length,0);const out=new Float32Array(n);let o=0;for(const p of ps){out.set(p,o);o+=p.length;}return out;}
+const blobToB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]||"");r.onerror=()=>rej(r.error);r.readAsDataURL(b);});
+const b64ToBlob=(b64,type)=>{const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type});};
+
+
+
+/* ---------- build ---------- */
+const spokenFrom=n=>n.replace(/^\s*((prof(essor)?|dr|mr|ms|mrs)\.?\s+)+/i,"").trim()||n.trim();
+function check(){
+  const why=[];
+  if(!paperFile)why.push("upload the paper");
+  if(!$("dname").value.trim())why.push("fill in your name");
+  const t=voiceSeconds();if(t<MIN_VOICE)why.push("prepare at least 0:30 of voice");else if(t>MAX_VOICE)why.push("trim voice to 5:00 or less");
+  if(clips.some(c=>c.state==="busy"))why.push("wait for clips to finish");
+  if(!$("consent").checked)why.push("confirm consent");
+  $("build").disabled=!!why.length||building;
+  $("buildwhy").textContent=why.length?"To build: "+why.join(", ")+".":"";
+}
+$("dname").addEventListener("input",check);
+$("consent").addEventListener("change",check);
+function step(k,cls,extra){const el=document.querySelector('#log .s[data-k="'+k+'"]');if(!el)return;el.classList.remove("on","done","fail");if(cls)el.classList.add(cls);if(extra!==undefined&&k==="narr")$("narrn").textContent=extra;}
+const friendly=e=>{
+  if(e&&e.code==="no_session")return 'Your session expired. <a href="/">Reload the page</a> and enter your invite code again.';
+  return esc(e&&e.message||"Something went wrong.");
+};
+
+$("build").onclick=async()=>{
+  if(building)return;building=true;check();
+  $("builderr").classList.add("hidden");$("builddone").classList.add("hidden");$("log").classList.remove("hidden");
+  document.querySelectorAll("#log .s").forEach(s=>s.classList.remove("on","done","fail"));$("narrn").textContent="";
+  const name=$("dname").value.trim(),spoken=spokenFrom(name);let cur="poster";
+  try{
+    step("poster","on");
+    const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf"},body:paperFile});
+    const poster=d.poster;step("poster","done");
+
+    cur="sample";step("sample","on");
+    let blob=encodeMp3(joinClips(),44100,80);
+    if(blob.size>9.5*1048576)blob=encodeMp3(await resample(joinClips(),22050),22050,48);
+    step("sample","done");
+
+    cur="clone";step("clone","on");
+    const v=await call("/api/voice",{method:"POST",headers:{"content-type":"audio/mpeg","x-consent":"yes","x-name":name.replace(/[^\x20-\x7e]/g,"")},body:blob});
+    step("clone","done");
+
+    cur="narr";
+    for(const [i,k] of SECTIONS.entries()){
+      step("narr","on","("+(i+1)+"/4)");
+      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,section:k,text:poster.scripts[k]});
+      try{await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}
+      catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+    }
+    step("narr","done","(4/4)");
+
+    cur="save";step("save","on");
+    const r=await call("/api/publish",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:v.slug,voice_id:v.voice_id,voice_token:v.voice_token,displayName:name,spokenName:spoken,poster})});
+    step("save","done");
+    const link=location.origin+"/p/"+r.slug;
+    $("builddone").innerHTML='<b>Your poster is ready.</b> <a href="/p/'+r.slug+'" target="_blank" rel="noopener">Open it</a>. Share this link: <code class="k">'+esc(link)+'</code> <button class="btn sec small" type="button" id="copylink">Copy link</button><br>Editing is not available yet; to change something, build again and the new poster replaces this one.';
+    $("builddone").classList.remove("hidden");
+    $("copylink").onclick=async()=>{try{await navigator.clipboard.writeText(link);$("copylink").textContent="Copied";}catch(e){}};
+    refreshMe();loadGallery();
+  }catch(e){step(cur,"fail");$("builderr").innerHTML=friendly(e);$("builderr").classList.remove("hidden");}
+  building=false;check();
+};
+
+/* ---------- gallery ---------- */
+async function loadGallery(){
+  const g=$("gallery");
+  try{const d=await call("/api/posters");g.innerHTML="";
+    if(!d.posters.length){g.innerHTML='<span class="muted">No posters yet. Yours could be the first.</span>';return;}
+    d.posters.forEach(p=>{const a=document.createElement("a");a.href="/p/"+p.slug;const t=document.createElement("div");t.className="t";t.textContent=p.title||"Untitled";const w=document.createElement("div");w.className="w";w.textContent=p.displayName||"";a.append(t,w);g.appendChild(a);});
+  }catch(e){g.innerHTML='<span class="muted">Could not load posters.</span>';}
+}
+
+refreshMe();loadGallery();
+window.__studio={clips,check};
+})();
+</script>
+</body>
+</html>

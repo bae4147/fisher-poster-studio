@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Interactive poster · Fisher Poster Studio</title>
+<style>
+:root{--u:2px;--ink:#14242a;--paper:#f4ecd6;--green:#2e8b57;--mint:#6bffb0;--gold:#f4c542;--night:#0b1418;--plum:#1a1530}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+button{font:inherit}
+.hidden{display:none!important}
+/* ---------------- poster viewer (shared with the Lee poster design) ---------------- */
+#viewer{position:fixed;inset:0;background:var(--night);color:var(--paper);font-family:"Courier New",ui-monospace,monospace}
+#viewer a{color:#9fd8ff}
+#vstage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#vwrap{position:relative;width:min(100vw,calc(100vh*1.5));height:min(66.667vw,100vh)}
+#poster{position:absolute;inset:0;display:grid;z-index:8;background:var(--night);grid-template-columns:minmax(0,1fr) calc(var(--u)*112);grid-template-rows:minmax(0,1fr);gap:calc(var(--u)*3);padding:calc(var(--u)*3)}
+#pleft{position:relative;min-width:0;min-height:0;overflow:hidden}
+#pmain{height:100%;background:var(--paper);color:var(--ink);overflow:auto;padding:calc(var(--u)*4) calc(var(--u)*5);border:calc(var(--u)*1.5) solid var(--mint);display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:calc(var(--u)*3)}
+#phead{grid-column:1/-1;border-bottom:calc(var(--u)*.8) solid var(--ink);padding-bottom:calc(var(--u)*2.5)}
+#phead .tag{font-size:calc(var(--u)*3.8);letter-spacing:calc(var(--u)*.5);color:var(--green);font-weight:bold}
+#phead h2{font-size:calc(var(--u)*7.6);line-height:1.18;margin:calc(var(--u)*1) 0 calc(var(--u)*1.5)}
+#phead .au{font-size:calc(var(--u)*4);line-height:1.4}
+#phead .au b{color:var(--green)}
+.zone{position:relative;border:calc(var(--u)*.8) solid var(--ink);background:#fffaf0;padding:calc(var(--u)*3) calc(var(--u)*3.5) calc(var(--u)*3);cursor:pointer;transition:transform .12s, box-shadow .12s;color:var(--ink)}
+.zone:hover{transform:translate(calc(var(--u)*-.6),calc(var(--u)*-.6));box-shadow:calc(var(--u)*1.2) calc(var(--u)*1.2) 0 var(--ink)}
+.zone.playing{background:#e6fff1;box-shadow:calc(var(--u)*1.2) calc(var(--u)*1.2) 0 var(--green);border-color:var(--green)}
+.zone.wide{grid-column:1/-1}
+.zone h4{margin:0 0 calc(var(--u)*1.8);font-size:calc(var(--u)*4.6);display:flex;align-items:center;gap:calc(var(--u)*2)}
+.zone h4 .n{background:var(--ink);color:var(--paper);padding:0 calc(var(--u)*1.5)}
+.zone h4 .pl{margin-left:auto;font-size:calc(var(--u)*3.6);border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*.4) calc(var(--u)*2);background:var(--gold);white-space:nowrap}
+.zone.playing h4 .pl{background:var(--mint)}
+.zone p{margin:0 0 calc(var(--u)*1.5);font-size:calc(var(--u)*4);line-height:1.42}
+.zone .big{font-size:calc(var(--u)*5.4);line-height:1.3;font-weight:bold}
+.zone ul{margin:0;padding-left:calc(var(--u)*5);font-size:calc(var(--u)*4);line-height:1.42}
+.zone li{margin-bottom:calc(var(--u)*1.2)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:calc(var(--u)*2);margin-top:calc(var(--u)*2)}
+.stat{border:calc(var(--u)*.6) solid var(--ink);background:var(--paper);padding:calc(var(--u)*2);text-align:center}
+.stat b{display:block;font-size:calc(var(--u)*7);color:var(--green);line-height:1.1}
+.stat span{font-size:calc(var(--u)*3.3);line-height:1.3;display:block;margin-top:calc(var(--u)*.8)}
+.studies{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:calc(var(--u)*2);margin-top:calc(var(--u)*1)}
+.st{border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*2);font-size:calc(var(--u)*3.5);line-height:1.35;background:var(--paper)}
+.st b{display:block;font-size:calc(var(--u)*4.2);margin-bottom:calc(var(--u)*.8)}
+.st .k{display:inline-block;margin-top:calc(var(--u)*1);background:var(--ink);color:var(--paper);padding:0 calc(var(--u)*1.2);font-size:calc(var(--u)*3.2)}
+.do{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:calc(var(--u)*2.5)}
+.do div{font-size:calc(var(--u)*3.8);line-height:1.38;border-left:calc(var(--u)*1.4) solid var(--green);padding-left:calc(var(--u)*2.2)}
+#pfoot{grid-column:1/-1;font-size:calc(var(--u)*3.2);opacity:.7;line-height:1.4}
+#pzoom{position:absolute;inset:0;display:none;z-index:3;background:#0b1418e6;padding:calc(var(--u)*4);overflow:auto;align-items:center;justify-content:center}
+#pzoom.on{display:flex}
+#pzoom .zone{width:100%;margin:auto;cursor:default;transform-origin:var(--ox,50%) var(--oy,50%);animation:pz .22s ease-out}
+#pzoom .zone:hover{transform:none}
+#pzoom .zone h4 .pl{cursor:pointer}
+#pzx{position:absolute;top:calc(var(--u)*2);right:calc(var(--u)*2);z-index:4;font-size:calc(var(--u)*3.6);background:var(--paper);color:var(--ink);border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*.6) calc(var(--u)*2.2);cursor:pointer}
+@keyframes pz{from{transform:scale(.55);opacity:.2}to{transform:scale(1);opacity:1}}
+#pside{display:flex;flex-direction:column;gap:calc(var(--u)*3);min-height:0}
+#pback{flex:0 0 auto;font-size:calc(var(--u)*3.4);background:var(--ink);color:var(--paper);border:calc(var(--u)*.6) solid #3a4a50;padding:calc(var(--u)*.8) calc(var(--u)*2.5);cursor:pointer;text-align:center;text-decoration:none}
+#pnow{background:var(--plum);border:calc(var(--u)) solid var(--paper);padding:calc(var(--u)*3);font-size:calc(var(--u)*3.8);line-height:1.42;max-height:42%;overflow:auto;flex:0 0 auto}
+#pnow .lbl{color:var(--mint);font-size:calc(var(--u)*3.4);letter-spacing:calc(var(--u)*.3);margin-bottom:calc(var(--u)*1.2);display:flex;justify-content:space-between;gap:calc(var(--u)*2)}
+#pnow button{font-size:calc(var(--u)*3.4);background:#2c2552;color:var(--paper);border:calc(var(--u)*.6) solid #6b5fbb;padding:0 calc(var(--u)*2);cursor:pointer}
+#pprog{height:calc(var(--u)*1.4);background:#0d0b18;margin:calc(var(--u)*1.5) 0;display:none}
+#pprog i{display:block;height:100%;width:0;background:var(--mint)}
+#pchat{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--plum);border:calc(var(--u)) solid var(--paper)}
+#pchat .hd{padding:calc(var(--u)*2) calc(var(--u)*3);border-bottom:calc(var(--u)*.6) solid #6b5fbb;font-size:calc(var(--u)*4.2);color:var(--gold)}
+#pchat .hd small{display:block;color:var(--paper);opacity:.6;font-size:calc(var(--u)*3)}
+#pchat .ai{font-size:calc(var(--u)*3);background:#6b5fbb;color:#fff;padding:0 calc(var(--u)*1.2);vertical-align:middle}
+#plog{flex:1 1 auto;overflow:auto;padding:calc(var(--u)*2.5) calc(var(--u)*3);display:flex;flex-direction:column;gap:calc(var(--u)*2)}
+.msg{font-size:calc(var(--u)*3.7);line-height:1.42;padding:calc(var(--u)*1.6) calc(var(--u)*2.4);max-width:94%;white-space:pre-wrap}
+.msg.u{align-self:flex-end;background:#4a3f8c}
+.msg.a{align-self:flex-start;background:#26203f;border-left:calc(var(--u)*.8) solid var(--mint)}
+.msg.sys{align-self:center;opacity:.6;font-size:calc(var(--u)*3.2);text-align:center}
+#psugg{display:flex;flex-wrap:wrap;gap:calc(var(--u)*1.2);padding:0 calc(var(--u)*3) calc(var(--u)*2)}
+#psugg button{font-size:calc(var(--u)*3.1);background:transparent;color:#9fd8ff;border:calc(var(--u)*.5) solid #9fd8ff66;padding:calc(var(--u)*.6) calc(var(--u)*1.6);cursor:pointer;text-align:left}
+#pform{display:flex;border-top:calc(var(--u)*.6) solid #6b5fbb}
+#pin{flex:1;font:inherit;font-size:calc(var(--u)*3.8);background:#0d0b18;color:var(--paper);border:0;padding:calc(var(--u)*2.2) calc(var(--u)*2.5);outline:none;min-width:0}
+#pform button{font-size:calc(var(--u)*3.8);background:var(--gold);color:var(--plum);border:0;padding:0 calc(var(--u)*3.5);cursor:pointer}
+#pform button:disabled{opacity:.5;cursor:default}
+#vmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:16px;line-height:1.6}
+
+#pmake{flex:0 0 auto;position:relative;display:flex;align-items:center;gap:calc(var(--u)*2.5);padding:calc(var(--u)*2.6) calc(var(--u)*3.2);border-radius:calc(var(--u)*3);text-decoration:none;color:#fff;
+ font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:linear-gradient(120deg,#2563eb,#7c3aed 55%,#db2777);background-size:200% 100%;
+ box-shadow:0 calc(var(--u)*1.5) calc(var(--u)*6) rgba(124,58,237,.45),inset 0 0 0 1px rgba(255,255,255,.18);animation:pmShift 6s ease-in-out infinite;transition:transform .15s}
+#pmake:hover{transform:translateY(calc(var(--u)*-.6))}
+#pmake::after{content:"";position:absolute;inset:calc(var(--u)*-.8);border-radius:calc(var(--u)*3.6);border:calc(var(--u)*.6) solid rgba(167,139,250,.7);animation:pmPulse 2.4s ease-out infinite;pointer-events:none}
+#pmake .pm-ic{font-size:calc(var(--u)*6);line-height:1}
+#pmake .pm-tx{display:flex;flex-direction:column;gap:calc(var(--u)*.5);min-width:0}
+#pmake .pm-tx b{font-size:calc(var(--u)*4.4);font-weight:650;letter-spacing:-.01em}
+#pmake .pm-tx small{font-size:calc(var(--u)*3);opacity:.85;line-height:1.3}
+#pmake .pm-ar{margin-left:auto;font-size:calc(var(--u)*5.5);transition:transform .15s}
+#pmake:hover .pm-ar{transform:translateX(calc(var(--u)*1))}
+@keyframes pmShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes pmPulse{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){#pmake,#pmake::after{animation:none}}
+
+</style>
+</head>
+<body>
+<div id="viewer"><div id="vstage"><div id="vwrap">
+ <div id="vmsg">Loading poster…</div>
+ <div id="poster" class="hidden">
+  <div id="pleft">
+   <div id="pmain"></div>
+   <div id="pzoom" aria-live="polite"><button id="pzx" type="button">✕ Back to poster (Esc)</button></div>
+  </div>
+  <div id="pside">
+   <a id="pmake" href="/" target="_blank" rel="noopener"><span class="pm-ic">✦</span><span class="pm-tx"><b>Make one for your paper</b><small>Upload a PDF and your voice. About 10 minutes.</small></span><span class="pm-ar">→</span></a>
+   <div id="pnow"><div class="lbl"><span id="pnowt">NOW PLAYING · nothing yet</span><span><button id="pstop" style="display:none">■ stop</button></span></div>
+    <div id="pprog"><i></i></div>
+    <div id="pnowx">Click a panel on the poster to hear that section.</div>
+    <div id="pnowv" style="margin-top:calc(var(--u)*2);font-size:calc(var(--u)*3);opacity:.55"></div></div>
+   <div id="pchat"><div class="hd"><span id="pchatt">Chat</span> <span class="ai">AI</span><small id="pchats"></small></div>
+    <div id="plog"></div>
+    <div id="psugg"></div>
+    <form id="pform"><input id="pin" autocomplete="off"><button id="psend">Ask</button></form></div>
+  </div>
+ </div>
+</div></div></div>
+
+
+<script>
+(()=>{
+"use strict";
+const SECTIONS=["narrative","findings","methods","takeaway"];
+const SEC_TITLES={narrative:"Research narrative",findings:"Key findings",methods:"Research methods",takeaway:"Practical takeaway"};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s);
+/* ============================ VIEWER ============================ */
+let V=null; // current poster state
+function resize(){const w=$("vwrap").clientWidth;document.documentElement.style.setProperty("--u",(w/384)+"px");const c=$("pzoom").querySelector(".zone");if(c)c.style.setProperty("--u",zoomScale());}
+addEventListener("resize",resize);
+function closeViewer(){if(!V)return;stopNarration();closeZoom();Object.values(V.urls||{}).forEach(u=>URL.revokeObjectURL(u));V=null;$("poster").classList.add("hidden");}
+async function openViewer(slug){
+  resize();$("vmsg").classList.remove("hidden");$("vmsg").textContent="Loading poster…";$("poster").classList.add("hidden");
+  let v;
+  try{const res=await fetch("/api/posters/"+slug);if(res.status===404){$("vmsg").innerHTML='This poster was not found. <a href="/">Go to Fisher Poster Studio</a>';return;}v=await res.json();if(v.error)throw 0;}
+  catch(e){$("vmsg").textContent="Could not load this poster. Please try again.";return;}
+  V={slug,data:v,urls:{},chat:[],chatInit:false};
+  SECTIONS.forEach(k=>{V.urls[k]="/audio/"+slug+"/"+k+".mp3";});
+  document.title=v.poster.title+" · Interactive poster";
+  renderPoster(v);$("vmsg").classList.add("hidden");$("poster").classList.remove("hidden");resize();
+}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function zoneEl(key,num,title,wide){const z=el("div","zone"+(wide?" wide":""));z.dataset.z=key;const h=el("h4");h.append(el("span","n",num),document.createTextNode(title));h.append(el("span","pl","▶ listen"));z.append(h);return z;}
+function renderPoster(v){
+  const p=v.poster,m=$("pmain");m.innerHTML="";
+  const head=el("div");head.id="phead";head.append(el("div","tag","INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN"),el("h2",null,p.title));
+  const au=el("div","au");p.authors.forEach((a,i)=>{if(i)au.append(", ");au.append(a===v.displayName||v.displayName.includes(a)||a.includes(v.spokenName||"\u0000")?el("b",null,a):document.createTextNode(a));});if(p.venue){au.append(" · ");au.append(el("i",null,p.venue));}head.append(au);m.append(head);
+  const z1=zoneEl("narrative","1",SEC_TITLES.narrative);z1.append(el("p","big",p.narrative.headline));p.narrative.paragraphs.forEach(t=>z1.append(el("p",null,t)));m.append(z1);
+  const z2=zoneEl("findings","2",SEC_TITLES.findings);z2.append(el("p","big",p.findings.headline));const ul=el("ul");p.findings.points.forEach(t=>ul.append(el("li",null,t)));z2.append(ul);
+  if(p.findings.stats.length){const sg=el("div","stats");p.findings.stats.forEach(s=>{const d=el("div","stat");d.append(el("b",null,s.value),el("span",null,s.label));sg.append(d);});z2.append(sg);}m.append(z2);
+  const z3=zoneEl("methods","3",SEC_TITLES.methods,true);const sts=el("div","studies");p.methods.studies.forEach(s=>{const d=el("div","st");d.append(el("b",null,s.name),document.createTextNode(s.detail));if(s.tag){d.append(el("br"));d.append(el("span","k",s.tag));}sts.append(d);});z3.append(sts);if(p.methods.note){const n=el("p",null,p.methods.note);n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
+  const z4=zoneEl("takeaway","4",SEC_TITLES.takeaway,true);z4.append(el("p","big",p.takeaway.headline));const dd=el("div","do");p.takeaway.tips.forEach(t=>{const d=el("div");d.append(el("b",null,t.title+". "),document.createTextNode(t.text));dd.append(d);});z4.append(dd);m.append(z4);
+  m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
+  m.querySelectorAll(".zone").forEach(z=>z.addEventListener("click",()=>{openZoom(z);if(pZone!==z.dataset.z)playZone(z.dataset.z);}));
+  $("pnowt").textContent="NOW PLAYING · nothing yet";$("pnowx").textContent="Click a panel on the poster to hear that section from "+v.displayName+".";
+  $("pnowv").textContent="Narration: AI voice of "+v.displayName+", made with their consent.";
+  $("pchatt").textContent="Chat with "+v.displayName;$("pchats").textContent="An AI version of "+v.displayName+", made with their consent. Replies are generated from the paper, not written by them.";
+  $("pin").placeholder="Ask "+v.displayName+" about the study…";
+  $("plog").innerHTML="";$("psugg").innerHTML="";$("psugg").style.display="";$("pin").disabled=false;$("psend").disabled=false;
+  initChat();
+}
+
+/* ---- narration ---- */
+let pAudio=null,pZone=null,pTimer=0;
+function stopNarration(){if(pAudio){try{pAudio.pause();}catch(e){}pAudio=null;}clearInterval(pTimer);document.querySelectorAll("#pmain .zone.playing").forEach(z=>z.classList.remove("playing"));$("pstop").style.display="none";$("pprog").style.display="none";pZone=null;setTimeout(syncZoom,0);}
+function playZone(key){
+  if(!V)return;
+  if(pZone===key){stopNarration();$("pnowt").textContent="NOW PLAYING · stopped";return;}
+  stopNarration();pZone=key;
+  document.querySelectorAll("#pmain .zone").forEach(z=>{if(z.dataset.z===key)z.classList.add("playing");});
+  $("pnowx").textContent=V.data.poster.scripts[key];$("pnowt").textContent="NOW PLAYING · "+SEC_TITLES[key];
+  const url=V.urls[key];
+  if(!url){$("pnowt").textContent=SEC_TITLES[key]+" · audio still loading, transcript below";$("pstop").style.display="inline-block";return;}
+  const a=new Audio(url);pAudio=a;
+  a.addEventListener("ended",()=>{if(pAudio===a){stopNarration();$("pnowt").textContent="Finished · "+SEC_TITLES[key];$("pnowx").textContent=V.data.poster.scripts[key];}});
+  const pr=a.play();if(pr&&pr.catch)pr.catch(()=>{});
+  $("pstop").style.display="inline-block";$("pprog").style.display="block";
+  pTimer=setInterval(()=>{if(pAudio===a&&a.duration)$("pprog").firstChild.style.width=(100*a.currentTime/a.duration)+"%";},200);
+  syncZoom();
+}
+$("pstop").onclick=()=>{stopNarration();$("pnowt").textContent="NOW PLAYING · stopped";};
+
+/* ---- zoom ---- */
+function zoomOpen(){return $("pzoom").classList.contains("on");}
+function zoomScale(){const u=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"))||2;return (u*1.55)+"px";}
+function openZoom(src){
+  const zb=$("pzoom");zb.querySelectorAll(".zone").forEach(n=>n.remove());
+  const c=src.cloneNode(true);c.classList.remove("wide");c.style.setProperty("--u",zoomScale());
+  const lr=$("pleft").getBoundingClientRect(),zr=src.getBoundingClientRect();
+  c.style.setProperty("--ox",(zr.left+zr.width/2-lr.left)+"px");c.style.setProperty("--oy",(zr.top+zr.height/2-lr.top)+"px");
+  const pl=c.querySelector(".pl");if(pl)pl.addEventListener("click",e=>{e.stopPropagation();playZone(src.dataset.z);syncZoom();});
+  c.addEventListener("click",e=>e.stopPropagation());
+  zb.appendChild(c);zb.classList.add("on");zb.scrollTop=0;syncZoom();
+}
+function syncZoom(){const c=$("pzoom").querySelector(".zone");if(!c)return;const on=pZone===c.dataset.z;c.classList.toggle("playing",on);const pl=c.querySelector(".pl");if(pl)pl.textContent=on?"■ pause":"▶ listen";}
+function closeZoom(){$("pzoom").classList.remove("on");$("pzoom").querySelectorAll(".zone").forEach(n=>n.remove());}
+$("pzoom").addEventListener("click",()=>closeZoom());
+$("pzx").addEventListener("click",e=>{e.stopPropagation();closeZoom();});
+addEventListener("keydown",e=>{if(e.key==="Escape"&&zoomOpen()){e.preventDefault();closeZoom();}});
+
+/* ---- chat ---- */
+function _unusedChatRules(v){return `You are an AI version of ${v.displayName}, created with their consent, standing at the poster for their paper (summarized below) on an interactive web poster about Fisher College of Business faculty research. Visitors are students and members of the public. Speak in the first person as the author ("we found", "in our second study").
+Speaking style: warm, clear and conversational, like a professor talking a curious visitor through their poster. Explain ideas with simple examples before giving numbers.
+Rules:
+- Content comes only from the paper summary below. If it does not cover something, say it is beyond what this paper tested instead of guessing.
+- Do not invent personal stories, opinions, future projects, or facts about the author's life, other work, or co-authors beyond what is below. If asked about those, say you would rather keep the conversation on this study.
+- If someone sincerely asks whether you are really ${v.displayName}, say plainly that you are an AI version of them built from the paper.
+- Be accurate about what was and was not supported.
+- Keep answers short: 2 to 5 sentences in plain language, giving numbers only when they help. Plain text, no markdown headings or bullet symbols.
+- Reply in the language the visitor writes in.
+- For off-topic requests, briefly steer back to the study.
+
+PAPER: ${v.poster.title}. ${v.poster.authors.join(", ")}. ${v.poster.venue}.
+SUMMARY:
+${v.poster.brief}`;}
+function addMsg(cls,t){const d=el("div","msg "+cls,t);$("plog").appendChild(d);$("plog").scrollTop=1e9;return d;}
+let chatBusy=false;
+function initChat(){
+  if(!V||V.chatInit)return;V.chatInit=true;
+  addMsg("a","Hi, I'm "+(V.data.spokenName||V.data.displayName)+". Thanks for stopping by! Ask me anything about the study: why we ran it, how we tested it, or what it means in practice.");
+  (V.data.poster.suggested.length?V.data.poster.suggested:["What was the main finding?","How did you test it?","What should people do with this?"]).forEach(q=>{const b=el("button",null,q);b.type="button";b.onclick=()=>ask(q);$("psugg").appendChild(b);});
+}
+async function ask(q){
+  q=(q||"").trim();if(!q||chatBusy||!V)return;
+  chatBusy=true;$("psend").disabled=true;$("pin").value="";$("psugg").style.display="none";
+  addMsg("u",q);const out=addMsg("a","…");
+  const msgs=V.chat.concat([{role:"user",content:q}]).slice(-12);
+  try{const res=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:V.slug,messages:msgs})});
+    const d=await res.json();if(!res.ok||d.error)throw d.error||{};
+    out.textContent=d.text||"(no answer)";V.chat=msgs.concat([{role:"assistant",content:out.textContent}]);}
+  catch(e){out.textContent=(e&&e.message)?e.message:"Sorry, something went wrong. Please try again.";}
+  chatBusy=false;$("psend").disabled=false;$("plog").scrollTop=1e9;
+}
+$("pform").addEventListener("submit",e=>{e.preventDefault();ask($("pin").value);});
+
+
+const m=location.pathname.match(/^\/p\/([a-z0-9]{6,20})/);
+if(m)openViewer(m[1]);else $("vmsg").innerHTML='No poster here. <a href="/">Go to Fisher Poster Studio</a>';
+})();
+</script>
+</body>
+</html>

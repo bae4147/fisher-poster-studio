@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leader Gratitude: Interactive Poster (Lee et al., 2026)</title>
+<style>
+:root{--u:2px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b1418;color:#f4ecd6;font-family:"Courier New",ui-monospace,monospace;overflow:hidden}
+#stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#wrap{position:relative;width:min(100vw,calc(100vh*1.5));height:min(66.667vw,100vh)}
+#poster{position:absolute}
+/* ---------- poster session ---------- */
+#poster{inset:0;display:none;z-index:8;background:#0b1418;grid-template-columns:minmax(0,1fr) calc(var(--u)*112);grid-template-rows:minmax(0,1fr);gap:calc(var(--u)*3);padding:calc(var(--u)*3)}
+#poster.on{display:grid}
+#pleft{position:relative;min-width:0;min-height:0;overflow:hidden}
+#pmain{height:100%;background:#f4ecd6;color:#14242a;overflow:auto;padding:calc(var(--u)*4) calc(var(--u)*5);border:calc(var(--u)*1.5) solid #6bffb0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:calc(var(--u)*3);font-family:"Courier New",ui-monospace,monospace}
+#phead{grid-column:1/-1;border-bottom:calc(var(--u)*.8) solid #14242a;padding-bottom:calc(var(--u)*2.5)}
+#phead .tag{font-size:calc(var(--u)*3.8);letter-spacing:calc(var(--u)*.5);color:#2e8b57;font-weight:bold}
+#phead h2{font-size:calc(var(--u)*7.6);line-height:1.18;margin:calc(var(--u)*1) 0 calc(var(--u)*1.5)}
+#phead .au{font-size:calc(var(--u)*4);line-height:1.4}
+#phead .au b{color:#2e8b57}
+.zone{position:relative;border:calc(var(--u)*.8) solid #14242a;background:#fffaf0;padding:calc(var(--u)*3) calc(var(--u)*3.5) calc(var(--u)*3);cursor:pointer;transition:transform .12s, box-shadow .12s}
+.zone:hover{transform:translate(calc(var(--u)*-.6),calc(var(--u)*-.6));box-shadow:calc(var(--u)*1.2) calc(var(--u)*1.2) 0 #14242a}
+.zone.playing{background:#e6fff1;box-shadow:calc(var(--u)*1.2) calc(var(--u)*1.2) 0 #2e8b57;border-color:#2e8b57}
+.zone.wide{grid-column:1/-1}
+.zone h4{margin:0 0 calc(var(--u)*1.8);font-size:calc(var(--u)*4.6);display:flex;align-items:center;gap:calc(var(--u)*2)}
+.zone h4 .n{background:#14242a;color:#f4ecd6;padding:0 calc(var(--u)*1.5)}
+.zone h4 .pl{margin-left:auto;font-size:calc(var(--u)*3.6);border:calc(var(--u)*.6) solid #14242a;padding:calc(var(--u)*.4) calc(var(--u)*2);background:#f4c542;white-space:nowrap}
+.zone.playing h4 .pl{background:#6bffb0}
+.zone p{margin:0 0 calc(var(--u)*1.5);font-size:calc(var(--u)*4);line-height:1.42}
+.zone .big{font-size:calc(var(--u)*5.4);line-height:1.3;font-weight:bold}
+.zone svg{width:100%;height:auto;display:block}
+.studies{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--u)*2);margin-top:calc(var(--u)*1)}
+.st{border:calc(var(--u)*.6) solid #14242a;padding:calc(var(--u)*2);font-size:calc(var(--u)*3.5);line-height:1.35;background:#f4ecd6}
+.st b{display:block;font-size:calc(var(--u)*4.2);margin-bottom:calc(var(--u)*.8)}
+.st .k{display:inline-block;margin-top:calc(var(--u)*1);background:#14242a;color:#f4ecd6;padding:0 calc(var(--u)*1.2);font-size:calc(var(--u)*3.2)}
+.do{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(var(--u)*2.5)}
+.do div{font-size:calc(var(--u)*3.8);line-height:1.38;border-left:calc(var(--u)*1.4) solid #2e8b57;padding-left:calc(var(--u)*2.2)}
+#pzoom{position:absolute;inset:0;display:none;z-index:3;background:#0b1418e6;padding:calc(var(--u)*4);overflow:auto;align-items:center;justify-content:center}
+#pzoom.on{display:flex}
+#pzoom .zone{width:100%;margin:auto;cursor:default;transform-origin:var(--ox,50%) var(--oy,50%);animation:pz .22s ease-out;font-family:"Courier New",ui-monospace,monospace;color:#14242a}
+#pzoom .zone:hover{transform:none}
+#pzoom .zone h4 .pl{cursor:pointer}
+#pzx{position:absolute;top:calc(var(--u)*2);right:calc(var(--u)*2);z-index:4;font:inherit;font-size:calc(var(--u)*3.6);background:#f4ecd6;color:#14242a;border:calc(var(--u)*.6) solid #14242a;padding:calc(var(--u)*.6) calc(var(--u)*2.2);cursor:pointer}
+@keyframes pz{from{transform:scale(.55);opacity:.2}to{transform:scale(1);opacity:1}}
+#pfoot{grid-column:1/-1;font-size:calc(var(--u)*3.2);opacity:.7;line-height:1.4}
+#pside{display:flex;flex-direction:column;gap:calc(var(--u)*3);min-height:0}
+#pnow{background:#1a1530;border:calc(var(--u)) solid #f4ecd6;padding:calc(var(--u)*3);font-size:calc(var(--u)*3.8);line-height:1.42;max-height:42%;overflow:auto;flex:0 0 auto}
+#pnow .lbl{color:#6bffb0;font-size:calc(var(--u)*3.4);letter-spacing:calc(var(--u)*.3);margin-bottom:calc(var(--u)*1.2);display:flex;justify-content:space-between;gap:calc(var(--u)*2)}
+#pnow button{font:inherit;font-size:calc(var(--u)*3.4);background:#2c2552;color:#f4ecd6;border:calc(var(--u)*.6) solid #6b5fbb;padding:0 calc(var(--u)*2);cursor:pointer}
+#pprog{height:calc(var(--u)*1.4);background:#0d0b18;margin:calc(var(--u)*1.5) 0;display:none}
+#pprog i{display:block;height:100%;width:0;background:#6bffb0}
+#pchat{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:#1a1530;border:calc(var(--u)) solid #f4ecd6}
+#pchat .hd{padding:calc(var(--u)*2) calc(var(--u)*3);border-bottom:calc(var(--u)*.6) solid #6b5fbb;font-size:calc(var(--u)*4.2);color:#f4c542}
+#pchat .hd small{display:block;color:#f4ecd6;opacity:.6;font-size:calc(var(--u)*3)}
+#plog{flex:1 1 auto;overflow:auto;padding:calc(var(--u)*2.5) calc(var(--u)*3);display:flex;flex-direction:column;gap:calc(var(--u)*2)}
+.msg{font-size:calc(var(--u)*3.7);line-height:1.42;padding:calc(var(--u)*1.6) calc(var(--u)*2.4);max-width:94%;white-space:pre-wrap}
+.msg.u{align-self:flex-end;background:#4a3f8c}
+.msg.a{align-self:flex-start;background:#26203f;border-left:calc(var(--u)*.8) solid #6bffb0}
+.msg.sys{align-self:center;opacity:.6;font-size:calc(var(--u)*3.2);text-align:center}
+#psugg{display:flex;flex-wrap:wrap;gap:calc(var(--u)*1.2);padding:0 calc(var(--u)*3) calc(var(--u)*2)}
+#psugg button{font:inherit;font-size:calc(var(--u)*3.1);background:transparent;color:#9fd8ff;border:calc(var(--u)*.5) solid #9fd8ff66;padding:calc(var(--u)*.6) calc(var(--u)*1.6);cursor:pointer;text-align:left}
+#pform{display:flex;border-top:calc(var(--u)*.6) solid #6b5fbb}
+#pin{flex:1;font:inherit;font-size:calc(var(--u)*3.8);background:#0d0b18;color:#f4ecd6;border:0;padding:calc(var(--u)*2.2) calc(var(--u)*2.5);outline:none;min-width:0}
+#pform button{font:inherit;font-size:calc(var(--u)*3.8);background:#f4c542;color:#1a1530;border:0;padding:0 calc(var(--u)*3.5);cursor:pointer}
+#pform button:disabled{opacity:.5;cursor:default}
+#pmake{flex:0 0 auto;position:relative;display:flex;align-items:center;gap:calc(var(--u)*2.5);padding:calc(var(--u)*2.6) calc(var(--u)*3.2);border-radius:calc(var(--u)*3);text-decoration:none;color:#fff;
+ font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:linear-gradient(120deg,#2563eb,#7c3aed 55%,#db2777);background-size:200% 100%;
+ box-shadow:0 calc(var(--u)*1.5) calc(var(--u)*6) rgba(124,58,237,.45),inset 0 0 0 1px rgba(255,255,255,.18);animation:pmShift 6s ease-in-out infinite;transition:transform .15s}
+#pmake:hover{transform:translateY(calc(var(--u)*-.6))}
+#pmake::after{content:"";position:absolute;inset:calc(var(--u)*-.8);border-radius:calc(var(--u)*3.6);border:calc(var(--u)*.6) solid rgba(167,139,250,.7);animation:pmPulse 2.4s ease-out infinite;pointer-events:none}
+#pmake .pm-ic{font-size:calc(var(--u)*6);line-height:1}
+#pmake .pm-tx{display:flex;flex-direction:column;gap:calc(var(--u)*.5);min-width:0}
+#pmake .pm-tx b{font-size:calc(var(--u)*4.4);font-weight:650;letter-spacing:-.01em}
+#pmake .pm-tx small{font-size:calc(var(--u)*3);opacity:.85;line-height:1.3}
+#pmake .pm-ar{margin-left:auto;font-size:calc(var(--u)*5.5);transition:transform .15s}
+#pmake:hover .pm-ar{transform:translateX(calc(var(--u)*1))}
+@keyframes pmShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes pmPulse{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){#pmake,#pmake::after{animation:none}}
+#pclose{flex:0 0 auto;font:inherit;font-size:calc(var(--u)*3.6);background:#14242a;color:#f4ecd6;border:calc(var(--u)*.6) solid #14242a;padding:calc(var(--u)*.8) calc(var(--u)*2.5);cursor:pointer}
+
+</style>
+</head>
+<body>
+<div id="stage"><div id="wrap">
+<div id="poster" class="on" aria-label="Interactive poster">
+<div id="pleft"><div id="pmain">
+ <div id="phead"><div class="tag">INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN</div>
+  <h2>Closer to the leader, above the coworkers?<br>How leader gratitude shapes responses across relational targets</h2>
+  <div class="au"><b>Hun Whee Lee</b>, Yahua Cai, Yuanmeng Wang, Seo-Young Byun, Sang Hoon Han &amp; Timothy Judge · <i>Organizational Behavior and Human Decision Processes</i> 197 (2026), 104538</div></div>
+ <div class="zone" data-z="narrative"><h4><span class="n">1</span>Research narrative<span class="pl">▶ listen</span></h4>
+  <p class="big">A thank-you from the boss is aimed at one person, but the whole team sees it.</p>
+  <p>Gratitude research mostly looks at the leader and one employee. This paper asks what the same thank-you does to the employee's view of their <b>coworkers</b>.</p>
+  <p>It combines two theories. <b>Social exchange</b>: thanks is an investment, so people return it to the leader. <b>Social comparison</b>: thanks also signals "you stand out," so some people use it to rank themselves above their peers.</p></div>
+ <div class="zone" data-z="findings"><h4><span class="n">2</span>Key findings<span class="pl">▶ listen</span></h4>
+  <div id="pmodel"></div>
+  <p style="margin-top:calc(var(--u)*1.5)"><b>Road 1</b> held in all 4 studies. <b>Road 2</b> never opened on average, only for people high in Machiavellianism (4 of 4 studies). Prosocial motivation strengthened Road 1 in the two field studies only.</p></div>
+ <div class="zone wide" data-z="findings2" data-audio="findings"><h4><span class="n">2b</span>Who reads thanks as a ranking? Effect of gratitude on "I'm above my coworkers"<span class="pl">▶ listen</span></h4>
+  <div id="pchart"></div><p style="margin:calc(var(--u)*1) 0 0;font-size:calc(var(--u)*3.4)">Simple slopes (b) of gratitude on sense of superiority. Red bars were significant in every study; grey bars never were. Rating scales differ across studies, so compare the direction, not the size.</p></div>
+ <div class="zone wide" data-z="methods"><h4><span class="n">3</span>Research methods: four studies, two kinds of evidence<span class="pl">▶ listen</span></h4>
+  <div class="studies">
+   <div class="st"><b>Study 1 · China</b>524 manufacturing employees, three waves a month apart. Supervisors rated helping and coworkers rated harmful behavior.<span class="k">field · multi-source</span></div>
+   <div class="st"><b>Study 2 · US</b>180 full-time employees (Prolific), two surveys a week apart.<span class="k">field · replication</span></div>
+   <div class="st"><b>Study 3 · Experiment</b>138 students with work experience read a scenario about "Sam," randomly assigned to high or low thanks.<span class="k">vignette · pre-registered</span></div>
+   <div class="st"><b>Study 4 · UK</b>142 full-time employees recalled a real episode of being thanked, or a neutral talk with their boss.<span class="k">recall · pre-registered</span></div>
+  </div>
+  <p style="margin-top:calc(var(--u)*2)">Field studies are realistic but can't show cause. The experiments show cause but are simplified. Used together, each covers the other's weakness.</p></div>
+ <div class="zone wide" data-z="takeaway"><h4><span class="n">4</span>Practical takeaway<span class="pl">▶ listen</span></h4>
+  <p class="big">Keep thanking people. Pay attention to how you frame it and who hears it.</p>
+  <div class="do"><div><b>Frame it as a team win.</b> When you praise one person's work, also name the people who supported it.</div><div><b>Train both sides.</b> Teach people to give and receive thanks gracefully, without ranking anyone.</div><div><b>Watch both relationships.</b> Track how thanks affects the bond with the leader and the relationships among peers.</div></div></div>
+ <div id="pfoot">Panel text paraphrases the published paper. Narration uses an AI voice of Prof. Lee, made with his permission. Data, syntax and supplements are on OSF (linked in the paper).</div>
+</div>
+<div id="pzoom" aria-live="polite"><button id="pzx" type="button">✕ Back to poster (Esc)</button></div>
+</div>
+<div id="pside">
+ <a id="pmake" href="/" target="_blank" rel="noopener"><span class="pm-ic">✦</span><span class="pm-tx"><b>Make one for your paper</b><small>Upload a PDF and your voice. About 10 minutes.</small></span><span class="pm-ar">→</span></a>
+  <div id="pnow"><div class="lbl"><span id="pnowt">NOW PLAYING · nothing yet</span><span><button id="pstop" style="display:none">■ stop</button></span></div>
+  <div id="pprog"><i></i></div>
+  <div id="pnowx">Click a panel on the poster to hear that section from Prof. Lee.</div><div style="margin-top:calc(var(--u)*2);font-size:calc(var(--u)*3);opacity:.55">Narration: AI voice of Prof. Lee, made with his permission.</div></div>
+ <div id="pchat"><div class="hd">Chat with Prof. Lee <span style="font-size:calc(var(--u)*3);background:#6b5fbb;color:#fff;padding:0 calc(var(--u)*1.2);vertical-align:middle">AI</span><small>An AI version of Prof. Hun Whee Lee, made with his permission. Replies are generated from the paper, not written by him.</small></div>
+  <div id="plog"></div>
+  <div id="psugg"></div>
+  <form id="pform"><input id="pin" placeholder="Ask Prof. Lee about the study…" autocomplete="off"><button id="psend">Ask</button></form></div>
+</div>
+</div>
+
+</div></div>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const blip=()=>{};
+/* ============ POSTER SESSION (Voice Tower) ============ */
+/* Narration files: put the researchers' recordings at these paths. Missing files fall back to the text summary. */
+const POSTER_AUDIO={narrative:'audio/lee-narrative.mp3',findings:'audio/lee-findings.mp3',methods:'audio/lee-methods.mp3',takeaway:'audio/lee-takeaway.mp3'};
+const POSTER_TITLES={narrative:'Research narrative',findings:'Key findings',methods:'Research methods',takeaway:'Practical takeaway'};
+const POSTER_SUMMARY={
+ narrative:"Hi, I'm Hun Lee, and thanks for stopping by. Let me start with a simple scene. Your manager walks over and says, thank you, that report really saved us this week. That feels good, right? And leadership research agrees: thanking people builds strong relationships. But here's what caught our attention. A thank-you is aimed at one person, yet it happens inside a team. Your coworkers are part of the picture too. So we asked a new question. What does that same thank-you do to how you see your coworkers? To answer it, we brought together two theories. Social exchange theory says thanks is an investment, so you want to give something back to the leader. Social comparison theory says thanks also tells you where you stand compared with your peers. Our idea was that one thank-you can switch on both at the same time.",
+ findings:"Here's what we found. You can think of it as two roads. Road one runs from the leader's thanks, to feeling close to the leader, to going the extra mile for the leader. That road showed up in all four of our studies. It's the reliable, good-news part of the story. Road two runs from thanks, to feeling superior to your coworkers, to behaving badly toward them. Now, on average, being thanked did not make people feel superior. Not in any of our studies. But for employees high in Machiavellianism, people who see work as a competition to win, it did, in all four studies. And that sense of superiority went along with more harmful behavior toward coworkers. We also expected prosocial motivation to strengthen road one. That held in our two field studies, but not in the two experiments, so we treat that part with caution.",
+ methods:"We didn't want to rest this on a single study, so we ran four. Study one followed five hundred twenty-four employees at a manufacturing company in eastern China, across three survey waves. Supervisors rated helping, and coworkers rated harmful behavior, so we weren't relying only on self-reports. Study two replicated the pattern with one hundred eighty full-time employees in the United States. Field studies feel real, but they can't prove cause and effect. So in study three, we ran an experiment. People read about a supervisor named Sam, who either thanked them often or rarely. And in study four, full-time employees in the United Kingdom recalled a real moment when their boss thanked them. We pre-registered both of those experiments. Each design covers the others' weak spots, and the key pattern held across all four.",
+ takeaway:"So what should a manager actually do? Please don't stop saying thank you. Gratitude is still, on balance, one of the most constructive things a leader can do. The lesson is about how you say it, and who's listening. When you thank one person, also recognize the people who supported them, and how their work fit together. That frames the moment as a team win, not a ranking. For organizations, we suggest training people to give and receive gratitude gracefully, and keeping an eye on both kinds of relationships: the bond with the leader, and the relationships among peers. So keep thanking people. Just keep the whole team in view."};
+let posterOpen=false,posterRoom=null,pAudio=null,pZone=null,pTimer=0;
+
+
+function stopNarration(){if(pAudio){try{pAudio.pause();}catch(e){}pAudio=null;}clearInterval(pTimer);document.querySelectorAll('#pmain .zone.playing').forEach(z=>z.classList.remove('playing'));setTimeout(syncZoom,0);$('pstop').style.display='none';$('pprog').style.display='none';pZone=null;}
+function playZone(el){
+  const key=el.dataset.audio||el.dataset.z;
+  if(pZone===key){stopNarration();$('pnowt').textContent='NOW PLAYING · stopped';return;}
+  stopNarration();pZone=key;
+  document.querySelectorAll('#pmain .zone').forEach(z=>{if((z.dataset.audio||z.dataset.z)===key)z.classList.add('playing');});
+  $('pnowx').textContent=POSTER_SUMMARY[key];
+  $('pnowt').textContent='NOW PLAYING · '+POSTER_TITLES[key];
+  const a=new Audio(POSTER_AUDIO[key]);pAudio=a;
+  a.addEventListener('error',()=>{if(pAudio!==a)return;pAudio=null;$('pnowt').textContent=POSTER_TITLES[key]+' · narration coming soon, summary below';$('pstop').style.display='inline-block';});
+  a.addEventListener('ended',()=>{if(pAudio===a){stopNarration();$('pnowt').textContent='Finished · '+POSTER_TITLES[key];$('pnowx').textContent=POSTER_SUMMARY[key];}});
+  const pr=a.play();if(pr&&pr.catch)pr.catch(()=>{});
+  $('pstop').style.display='inline-block';$('pprog').style.display='block';
+  pTimer=setInterval(()=>{if(pAudio===a&&a.duration)$('pprog').firstChild.style.width=(100*a.currentTime/a.duration)+'%';},200);
+}
+document.querySelectorAll('#pmain .zone').forEach(z=>z.addEventListener('click',()=>{openZoom(z);const k=z.dataset.audio||z.dataset.z;if(pZone!==k)playZone(z);}));
+function zoomOpen(){return $('pzoom').classList.contains('on');}
+function zoomScale(){const u=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u'))||2;return (u*1.55)+'px';}
+function openZoom(src){
+  const zb=$('pzoom');zb.querySelectorAll('.zone').forEach(n=>n.remove());
+  const c=src.cloneNode(true);c.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));c.classList.remove('wide');
+  c.style.setProperty('--u',zoomScale());
+  const lr=$('pleft').getBoundingClientRect(),zr=src.getBoundingClientRect();
+  c.style.setProperty('--ox',(zr.left+zr.width/2-lr.left)+'px');c.style.setProperty('--oy',(zr.top+zr.height/2-lr.top)+'px');
+  const pl=c.querySelector('.pl');if(pl)pl.addEventListener('click',e=>{e.stopPropagation();playZone(src);syncZoom();});
+  c.addEventListener('click',e=>e.stopPropagation());
+  zb.appendChild(c);zb.classList.add('on');zb.scrollTop=0;syncZoom();
+}
+function syncZoom(){const c=$('pzoom').querySelector('.zone');if(!c)return;const k=c.dataset.audio||c.dataset.z,on=pZone===k;c.classList.toggle('playing',on);const pl=c.querySelector('.pl');if(pl)pl.textContent=on?'■ pause':'▶ listen';}
+function closeZoom(){$('pzoom').classList.remove('on');$('pzoom').querySelectorAll('.zone').forEach(n=>n.remove());}
+$('pzoom').addEventListener('click',()=>closeZoom());
+$('pzx').addEventListener('click',e=>{e.stopPropagation();closeZoom();});
+addEventListener('resize',()=>{const c=$('pzoom').querySelector('.zone');if(c)c.style.setProperty('--u',zoomScale());});
+$('pstop').onclick=()=>{stopNarration();$('pnowt').textContent='NOW PLAYING · stopped';};
+
+/* model diagram */
+$('pmodel').innerHTML=`<svg viewBox="0 0 250 104" font-family="Courier New, monospace" role="img" aria-label="Dual-pathway model">
+<defs><marker id="ar" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L6,3L0,6z" fill="#14242a"/></marker></defs>
+<rect x="2" y="40" width="54" height="24" fill="#14242a"/><text x="29" y="50" fill="#f4ecd6" font-size="7" text-anchor="middle" font-weight="bold">Leader</text><text x="29" y="59" fill="#f4ecd6" font-size="7" text-anchor="middle" font-weight="bold">gratitude</text>
+<rect x="92" y="6" width="68" height="22" fill="#d9f7e6" stroke="#2e8b57" stroke-width="1.4"/><text x="126" y="15" font-size="6.4" text-anchor="middle">Relational</text><text x="126" y="23" font-size="6.4" text-anchor="middle">attachment</text>
+<rect x="186" y="6" width="62" height="22" fill="#2e8b57"/><text x="217" y="15" font-size="6.2" fill="#fff" text-anchor="middle">Helping (OCB)</text><text x="217" y="23" font-size="6.2" fill="#fff" text-anchor="middle">→ the leader</text>
+<rect x="92" y="76" width="68" height="22" fill="#fbe1e1" stroke="#b33" stroke-width="1.4"/><text x="126" y="85" font-size="6.4" text-anchor="middle">Superiority over</text><text x="126" y="93" font-size="6.4" text-anchor="middle">coworkers</text>
+<rect x="186" y="76" width="62" height="22" fill="#b33"/><text x="217" y="85" font-size="6.2" fill="#fff" text-anchor="middle">Harm (CWB)</text><text x="217" y="93" font-size="6.2" fill="#fff" text-anchor="middle">→ coworkers</text>
+<path d="M56,46 L90,20" stroke="#14242a" stroke-width="1.3" marker-end="url(#ar)" fill="none"/><path d="M56,58 L90,84" stroke="#14242a" stroke-width="1.3" stroke-dasharray="3 2" marker-end="url(#ar)" fill="none"/>
+<path d="M160,17 L184,17" stroke="#14242a" stroke-width="1.3" marker-end="url(#ar)"/><path d="M160,87 L184,87" stroke="#14242a" stroke-width="1.3" marker-end="url(#ar)"/>
+<text x="3" y="33" font-size="5.6" fill="#2e8b57" font-weight="bold">ROAD 1 · 4/4 studies</text>
+<text x="3" y="75" font-size="5.6" fill="#b33" font-weight="bold">ROAD 2 · conditional</text>
+<rect x="91" y="37" width="78" height="12" fill="#fff" stroke="#2e8b57" stroke-dasharray="2 1.5"/><text x="130" y="45" font-size="4.8" text-anchor="middle">+ Prosocial motiv. (2/4)</text>
+<rect x="91" y="55" width="78" height="12" fill="#fff" stroke="#b33"/><text x="130" y="63" font-size="4.8" text-anchor="middle">+ Machiavellianism (4/4)</text>
+<path d="M120,37 L112,30" stroke="#2e8b57" stroke-width=".9" marker-end="url(#ar)"/><path d="M120,67 L112,74" stroke="#b33" stroke-width=".9" marker-end="url(#ar)"/>
+</svg>`;
+
+/* simple-slope chart: gratitude -> sense of superiority, high vs low Machiavellianism (values from the paper) */
+(()=>{const S=[['Study 1','China field',.10,-.08],['Study 2','US field',.25,-.07],['Study 3','Vignette',.59,-.21],['Study 4','Recall',.75,-.27]];
+ const W=500,H=140,x0=36,y0=82,sc=68,gw=(W-x0-10)/4;let s=`<svg viewBox="0 0 ${W} ${H}" font-family="Courier New, monospace" role="img" aria-label="Simple slopes by study">`;
+ [.75,.5,.25,0,-.25].forEach(v=>{const y=y0-v*sc;s+=`<line x1="${x0}" x2="${W-6}" y1="${y}" y2="${y}" stroke="${v===0?'#14242a':'#14242a22'}" stroke-width="${v===0?1.2:.6}"/><text x="${x0-4}" y="${y+2.5}" font-size="7" text-anchor="end">${v.toFixed(2).replace('0.','.').replace('-.','−.')}</text>`;});
+ S.forEach((d,i)=>{const cx=x0+gw*i+gw/2,bw=26;
+  [[d[2],'#b33',-bw-2,'High Mach'],[d[3],'#8a8f99',2,'Low Mach']].forEach(([v,c,dx])=>{const y=v>=0?y0-v*sc:y0;s+=`<rect x="${cx+dx}" y="${y}" width="${bw}" height="${Math.abs(v)*sc}" fill="${c}"/><text x="${cx+dx+bw/2}" y="${v>=0?y-3:y0+Math.abs(v)*sc+8}" font-size="7.2" text-anchor="middle" font-weight="bold">${v.toFixed(2).replace('0.','.').replace('-.','−.')}</text>`;});
+  s+=`<text x="${cx}" y="${H-12}" font-size="8" text-anchor="middle" font-weight="bold">${d[0]}</text><text x="${cx}" y="${H-3}" font-size="6.6" text-anchor="middle">${d[1]}</text>`;});
+ s+=`<rect x="${W-150}" y="2" width="8" height="8" fill="#b33"/><text x="${W-139}" y="9" font-size="7.2">High Machiavellianism</text><rect x="${W-150}" y="13" width="8" height="8" fill="#8a8f99"/><text x="${W-139}" y="20" font-size="7.2">Low Machiavellianism</text>`;
+ s+='</svg>';
+ $('pchart').innerHTML=s;})();
+
+/* Q&A chat: answered by the site API (prompt lives on the server) */
+let chatHist=[],chatBusy=false,chatInit=false;
+function addMsg(cls,t){const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;$('plog').appendChild(d);$('plog').scrollTop=1e9;return d;}
+function initChat(){
+  if(chatInit)return;chatInit=true;
+  addMsg('a','Hi, I\'m Hun Lee. Thanks for stopping by our poster! Ask me anything about the study: why we ran it, how we tested it, or what it means for managers.');
+  ['Why Machiavellianism and not narcissism?','How was gratitude manipulated in Study 3?','Does this mean leaders should thank less?','What did not replicate?'].forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.onclick=()=>ask(q);$('psugg').appendChild(b);});
+}
+async function ask(q){
+  q=(q||'').trim();if(!q||chatBusy)return;
+  chatBusy=true;$('psend').disabled=true;$('pin').value='';$('psugg').style.display='none';
+  addMsg('u',q);const out=addMsg('a','…');
+  const msgs=chatHist.concat([{role:'user',content:q}]).slice(-12);
+  try{const res=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({slug:'lee',messages:msgs})});
+    const d=await res.json();if(!res.ok||d.error)throw d.error||{};
+    out.textContent=d.text||'(no answer)';chatHist=msgs.concat([{role:'assistant',content:out.textContent}]);}
+  catch(e){out.textContent=(e&&e.message)?e.message:'Sorry, something went wrong. Please try again.';}
+  chatBusy=false;$('psend').disabled=false;$('plog').scrollTop=1e9;
+}
+$('pform').addEventListener('submit',e=>{e.preventDefault();ask($('pin').value);});
+
+
+addEventListener('keydown',e=>{if(e.key==='Escape'&&zoomOpen()){e.preventDefault();closeZoom();}});
+function resize(){const w=$('wrap').clientWidth;document.documentElement.style.setProperty('--u',(w/384)+'px');const c=$('pzoom').querySelector('.zone');if(c)c.style.setProperty('--u',zoomScale());}
+addEventListener('resize',resize);resize();
+initChat();
+})();
+</script>
+</body>
+</html>
