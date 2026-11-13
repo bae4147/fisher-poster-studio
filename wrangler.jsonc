@@ -19,6 +19,7 @@
     "OPENAI_CHAT_MODEL": "gpt-6-luna",
     "OPENAI_REASONING": "medium",
     "PDF_DETAIL": "low",
-    "MODEL_ID": "eleven_multilingual_v2"
+    "MODEL_ID": "eleven_multilingual_v2",
+    "DAILY_BUILD_LIMIT": "20"
   }
 }

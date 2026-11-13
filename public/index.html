@@ -75,20 +75,12 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
 </head>
 <body>
 <div id="studio">
- <div class="topbar"><h1>Fisher Poster Studio</h1><a href="#" id="signout" class="hidden">Sign out</a></div>
+ <h1>Fisher Poster Studio</h1>
  <p class="lede">Turn one of your papers into an interactive poster. Visitors click a panel to zoom in and hear you explain it, in an AI version of your own voice, and can ask an AI version of you questions about the paper.</p>
 
  <div id="envnote" class="notice hidden"></div>
 
- <!-- invite gate -->
- <div class="step" id="gate">
-  <h2>Enter your invite code</h2>
-  <p class="sub">You'll find it in your invitation email.</p>
-  <form class="row" id="gateform"><input type="text" id="code" placeholder="e.g. fisher-xxxxxxxx" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="gatebtn">Continue</button></form>
-  <div class="err hidden" id="gateerr"></div>
- </div>
-
- <div id="app" class="hidden">
+ <div id="app">
   <div class="notice"><b>Early version.</b> Once a poster is made it cannot be edited yet. To change it, build it again (your new poster replaces the old one).</div>
   <div id="mine" class="notice hidden"></div>
 
@@ -166,24 +158,19 @@ async function call(path,opts={}){
   return data;
 }
 
-/* ---------- invite gate ---------- */
+/* ---------- session + server check ---------- */
 async function refreshMe(){
-  let me={ok:false};try{me=await call("/api/me");}catch(e){}
-  $("gate").classList.toggle("hidden",me.ok);$("app").classList.toggle("hidden",!me.ok);$("signout").classList.toggle("hidden",!me.ok);
+  let me=null;try{me=await call("/api/me");}catch(e){}
   const m=$("mine");
-  if(me.mine){m.innerHTML="";m.append("You already have a poster: ");const a=document.createElement("a");a.href="/p/"+me.mine.slug;a.textContent=me.mine.title;m.append(a,". Building again replaces it.");m.classList.remove("hidden");}
+  if(me&&me.mine){m.innerHTML="";m.append("You already made a poster in this browser: ");const a=document.createElement("a");a.href="/p/"+me.mine.slug;a.textContent=me.mine.title;m.append(a,". Building again replaces it.");m.classList.remove("hidden");}
   else m.classList.add("hidden");
   check();
 }
-$("gateform").addEventListener("submit",async e=>{
-  e.preventDefault();const code=$("code").value.trim();if(!code)return;
-  $("gatebtn").disabled=true;$("gateerr").classList.add("hidden");
-  try{await call("/api/auth",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code})});await refreshMe();}
-  catch(err){$("gateerr").textContent=err.message||"Something went wrong.";$("gateerr").classList.remove("hidden");}
-  $("gatebtn").disabled=false;
-});
-$("signout").onclick=async e=>{e.preventDefault();try{await call("/api/logout",{method:"POST"});}catch(x){}refreshMe();};
-
+async function checkServer(){
+  try{const s=await call("/api/status");const miss=[];if(!s.openai)miss.push("OPENAI_API_KEY");if(!s.elevenlabs)miss.push("ELEVENLABS_API_KEY");if(!s.token)miss.push("TOKEN_SECRET");if(!s.storage)miss.push("POSTERS storage");
+    if(miss.length){const n=$("envnote");n.className="notice err";n.textContent="The studio isn't fully set up yet (missing on the server: "+miss.join(", ")+"). Building won't work until this is fixed.";}}
+  catch(e){}
+}
 /* ---------- paper ---------- */
 function pick(drop,input,fn){
   drop.addEventListener("click",()=>input.click());
@@ -330,7 +317,7 @@ $("dname").addEventListener("input",check);
 $("consent").addEventListener("change",check);
 function step(k,cls,extra){const el=document.querySelector('#log .s[data-k="'+k+'"]');if(!el)return;el.classList.remove("on","done","fail");if(cls)el.classList.add(cls);if(extra!==undefined&&k==="narr")$("narrn").textContent=extra;}
 const friendly=e=>{
-  if(e&&e.code==="no_session")return 'Your session expired. <a href="/">Reload the page</a> and enter your invite code again.';
+  if(e&&e.code==="no_session")return 'Please <a href="/">reload the page</a> and try again.';
   return esc(e&&e.message||"Something went wrong.");
 };
 
@@ -383,7 +370,7 @@ async function loadGallery(){
   }catch(e){g.innerHTML='<span class="muted">Could not load posters.</span>';}
 }
 
-refreshMe();loadGallery();
+checkServer();refreshMe();loadGallery();
 window.__studio={clips,check};
 })();
 </script>

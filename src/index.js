@@ -3,20 +3,20 @@
  *
  * Static pages come from ./public (studio at "/", posters at "/p/<slug>", Hun Lee's poster at "/lee/").
  * This Worker adds the API:
- *   POST /api/auth            {code}            -> sets a signed session cookie for an invite code
- *   GET  /api/me                                -> {ok}
+ *   GET  /api/me                                -> {ok, mine} and a signed per-browser owner cookie
+ *   GET  /api/status                            -> which server settings are present (no values)
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
  *   POST /api/voice           (MP3 body)        -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
- *   POST /api/publish         {slug, poster...} -> saves the poster; replaces this invite code's older poster
+ *   POST /api/publish         {slug, poster...} -> saves the poster; replaces this browser's older poster
  *   GET  /api/posters                           -> gallery list
  *   GET  /api/posters/<slug>                    -> one poster (public)
  *   GET  /audio/<slug>/<section>.mp3            -> narration audio (public)
  *   POST /api/chat            {slug, messages}  -> AI version of the author answers from the paper (public)
  *   POST /mcp/<invite-code>                     -> the earlier MCP connector, kept for compatibility
  *
- * Secrets: OPENAI_API_KEY, ELEVENLABS_API_KEY, INVITE_CODES, TOKEN_SECRET
- * Vars (wrangler.jsonc): OPENAI_POSTER_MODEL, OPENAI_CHAT_MODEL, OPENAI_REASONING, PDF_DETAIL, MODEL_ID
+ * Secrets: OPENAI_API_KEY, ELEVENLABS_API_KEY, TOKEN_SECRET (INVITE_CODES is only used by /mcp/)
+ * Vars (wrangler.jsonc): OPENAI_POSTER_MODEL, OPENAI_CHAT_MODEL, OPENAI_REASONING, PDF_DETAIL, MODEL_ID, DAILY_BUILD_LIMIT
  * KV binding: POSTERS
  */
 import mcp from "./mcp.js";
@@ -26,7 +26,7 @@ const SECTIONS = ["narrative", "findings", "methods", "takeaway"];
 const MAX_PDF = 30 * 1024 * 1024;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
-const COOKIE = "fps";
+const COOKIE = "fpo";
 
 /* ---------------- small helpers ---------------- */
 const json = (obj, status = 200, headers = {}) =>
@@ -41,16 +41,18 @@ async function hmac(env, msg) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(requireSecret(env)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return b64u(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg))).slice(0, 32);
 }
-const inviteCodes = env => String(env.INVITE_CODES || "").split(",").map(s => s.trim()).filter(Boolean);
-async function session(request, env) {
+/* Each browser gets a signed owner id, so rebuilding replaces that browser's earlier poster. */
+async function owner(request, env) {
   const m = (request.headers.get("cookie") || "").match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`));
   if (!m) return null;
-  const [code64, sig] = decodeURIComponent(m[1]).split(".");
-  let code; try { code = atob(code64); } catch { return null; }
-  if (!sig || sig !== await hmac(env, "sess:" + code)) return null;
-  return inviteCodes(env).includes(code) ? code : null;
+  const [id, sig] = decodeURIComponent(m[1]).split(".");
+  if (!/^[a-z0-9]{16,40}$/.test(id || "") || !sig || sig !== await hmac(env, "owner:" + id)) return null;
+  return id;
 }
-const codeKey = async (env, code) => "code:" + (await hmac(env, "code:" + code));
+async function ownerCookie(env, id) {
+  return `${COOKIE}=${encodeURIComponent(id + "." + await hmac(env, "owner:" + id))}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`;
+}
+const ownerKey = id => "owner:" + id;
 const slugMake = () => { const a = "abcdefghjkmnpqrstuvwxyz23456789"; return [...crypto.getRandomValues(new Uint8Array(10))].map(x => a[x % a.length]).join(""); };
 
 /* Keep slow upstream calls alive: stream a space every 8 s, then the JSON. Clients trim and parse. */
@@ -223,20 +225,17 @@ async function chat(env, system, messages) {
 async function api(request, env, url) {
   const p = url.pathname, method = request.method;
 
-  if (p === "/api/auth" && method === "POST") {
-    let body = {}; try { body = await request.json(); } catch {}
-    const code = String(body.code || "").trim();
-    if (!code || !inviteCodes(env).includes(code)) return err(401, "That invite code isn't valid.", "bad_code");
-    const val = encodeURIComponent(btoa(code) + "." + await hmac(env, "sess:" + code));
-    return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=${val}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 60}` });
+  if (p === "/api/status") {
+    return json({ openai: !!env.OPENAI_API_KEY, elevenlabs: !!env.ELEVENLABS_API_KEY, token: !!env.TOKEN_SECRET, storage: !!env.POSTERS });
   }
   if (p === "/api/me") {
-    const code = await session(request, env);
+    let id = await owner(request, env), headers = {};
+    if (!id) { id = slugMake() + slugMake(); headers["set-cookie"] = await ownerCookie(env, id); }
     let mine = null;
-    if (code) { const slug = await env.POSTERS.get(await codeKey(env, code)); if (slug) { const v = await env.POSTERS.get("poster:" + slug, "json"); if (v) mine = { slug, title: v.poster.title }; } }
-    return json({ ok: !!code, mine });
+    const slug = await env.POSTERS.get(ownerKey(id));
+    if (slug) { const v = await env.POSTERS.get("poster:" + slug, "json"); if (v) mine = { slug, title: v.poster.title }; }
+    return json({ ok: true, mine }, 200, headers);
   }
-  if (p === "/api/logout" && method === "POST") return json({ ok: true }, 200, { "set-cookie": `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax` });
 
   if (p === "/api/posters" && method === "GET") {
     const list = await env.POSTERS.list({ prefix: "poster:" });
@@ -264,9 +263,9 @@ async function api(request, env, url) {
     catch (e) { return err(502, "The chat is unavailable right now.", "upstream"); }
   }
 
-  /* --- everything below needs an invite code session --- */
-  const code = await session(request, env);
-  if (!code) return err(401, "Please enter your invite code again.", "no_session");
+  /* --- building: needs this browser's owner cookie (set by /api/me) --- */
+  const ownerId = await owner(request, env);
+  if (!ownerId) return err(401, "Please reload the page and try again.", "no_session");
 
   if (p === "/api/draft" && method === "POST") {
     const spoken = String(url.searchParams.get("spoken") || "").trim().slice(0, 60);
@@ -275,6 +274,10 @@ async function api(request, env, url) {
     if (!bytes.byteLength) return err(400, "No PDF received.", "bad_request");
     if (bytes.byteLength > MAX_PDF) return err(413, "That PDF is larger than 30 MB.", "too_large");
     if (!spoken) return err(400, "Name is missing.", "bad_request");
+    const day = "count:" + new Date().toISOString().slice(0, 10), limit = parseInt(env.DAILY_BUILD_LIMIT || "20", 10);
+    const used = parseInt(await env.POSTERS.get(day) || "0", 10);
+    if (used >= limit) return err(429, "The studio has reached today's limit of " + limit + " posters. Please try again tomorrow.", "daily_limit");
+    await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
     return slowJson(async () => {
       const fileId = await uploadPdf(env, bytes, fname);
       try { return { poster: await draftPoster(env, fileId, spoken) }; }
@@ -318,7 +321,7 @@ async function api(request, env, url) {
     for (const k of SECTIONS) if (!(await env.POSTERS.get(`audio:${slug}:${k}`, "arrayBuffer"))) return err(400, "Narration for " + k + " is missing. Build again.", "missing_audio");
     const createdAt = Date.now();
     await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
-    const ck = await codeKey(env, code), old = await env.POSTERS.get(ck);
+    const ck = ownerKey(ownerId), old = await env.POSTERS.get(ck);
     await env.POSTERS.put(ck, slug);
     if (old && old !== slug) { await env.POSTERS.delete("poster:" + old); for (const k of SECTIONS) await env.POSTERS.delete(`audio:${old}:${k}`); }
     return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString() });
