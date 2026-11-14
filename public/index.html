@@ -328,6 +328,7 @@ $("build").onclick=async()=>{
   const name=$("dname").value.trim(),spoken=spokenFrom(name);let cur="poster",v=null,published=false;
   try{
     step("poster","on");
+    await call("/api/me");  // refresh this browser's owner cookie before building
     const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf"},body:paperFile});
     const poster=d.poster;step("poster","done");
 
