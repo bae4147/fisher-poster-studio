@@ -105,7 +105,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
    <div style="margin-top:18px;font-size:14.5px;color:#374151">Prepared voice: <b id="totlen">0:00</b> <span id="totmsg" class="bad">— add at least 0:30</span></div>
    <div class="meter"><span class="band" style="left:20%;width:40%"></span><i id="totbar" style="width:0"></i></div>
    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9ca3af"><span>0:00</span><span>recommended 1:00–3:00</span><span>5:00</span></div>
-   <label class="consent"><input type="checkbox" id="consent"><span>This is my own voice, and I agree to an AI voice clone of me being created with ElevenLabs and used to narrate my poster.</span></label>
+   <label class="consent"><input type="checkbox" id="consent"><span>This is my own voice, and I agree to an AI voice clone of me being created with ElevenLabs to narrate my poster. The clone is deleted from ElevenLabs as soon as the narration is made.</span></label>
   </div>
 
   <div class="step" id="s4">
@@ -325,7 +325,7 @@ $("build").onclick=async()=>{
   if(building)return;building=true;check();
   $("builderr").classList.add("hidden");$("builddone").classList.add("hidden");$("log").classList.remove("hidden");
   document.querySelectorAll("#log .s").forEach(s=>s.classList.remove("on","done","fail"));$("narrn").textContent="";
-  const name=$("dname").value.trim(),spoken=spokenFrom(name);let cur="poster";
+  const name=$("dname").value.trim(),spoken=spokenFrom(name);let cur="poster",v=null,published=false;
   try{
     step("poster","on");
     const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf"},body:paperFile});
@@ -337,7 +337,7 @@ $("build").onclick=async()=>{
     step("sample","done");
 
     cur="clone";step("clone","on");
-    const v=await call("/api/voice",{method:"POST",headers:{"content-type":"audio/mpeg","x-consent":"yes","x-name":name.replace(/[^\x20-\x7e]/g,"")},body:blob});
+    v=await call("/api/voice",{method:"POST",headers:{"content-type":"audio/mpeg","x-consent":"yes","x-name":name.replace(/[^\x20-\x7e]/g,"")},body:blob});
     step("clone","done");
 
     cur="narr";
@@ -351,13 +351,16 @@ $("build").onclick=async()=>{
 
     cur="save";step("save","on");
     const r=await call("/api/publish",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:v.slug,voice_id:v.voice_id,voice_token:v.voice_token,displayName:name,spokenName:spoken,poster})});
-    step("save","done");
+    published=true;step("save","done");
     const link=location.origin+"/p/"+r.slug;
     $("builddone").innerHTML='<b>Your poster is ready.</b> <a href="/p/'+r.slug+'" target="_blank" rel="noopener">Open it</a>. Share this link: <code class="k">'+esc(link)+'</code> <button class="btn sec small" type="button" id="copylink">Copy link</button><br>Editing is not available yet; to change something, build again and the new poster replaces this one.';
     $("builddone").classList.remove("hidden");
     $("copylink").onclick=async()=>{try{await navigator.clipboard.writeText(link);$("copylink").textContent="Copied";}catch(e){}};
     refreshMe();loadGallery();
-  }catch(e){step(cur,"fail");$("builderr").innerHTML=friendly(e);$("builderr").classList.remove("hidden");}
+  }catch(e){
+    step(cur,"fail");$("builderr").innerHTML=friendly(e);$("builderr").classList.remove("hidden");
+    if(v&&!published){try{await call("/api/voice/discard",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token})});}catch(x){}}
+  }
   building=false;check();
 };
 

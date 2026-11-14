@@ -8,7 +8,9 @@
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
  *   POST /api/voice           (MP3 body)        -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
- *   POST /api/publish         {slug, poster...} -> saves the poster; replaces this browser's older poster
+ *   POST /api/publish         {slug, poster...} -> saves the poster; replaces this browser's older poster;
+ *                                                  then deletes the voice clone from ElevenLabs
+ *   POST /api/voice/discard   {voice, token}    -> deletes a voice clone after a failed build
  *   GET  /api/posters                           -> gallery list
  *   GET  /api/posters/<slug>                    -> one poster (public)
  *   GET  /audio/<slug>/<section>.mp3            -> narration audio (public)
@@ -184,6 +186,12 @@ async function cloneVoice(env, bytes, name) {
   if (!data.voice_id) throw new UpstreamError("ElevenLabs did not return a voice.", "upstream");
   return data.voice_id;
 }
+async function deleteVoice(env, voiceId) {
+  try {
+    const res = await fetch(`${elevenBase(env)}/v1/voices/${voiceId}`, { method: "DELETE", headers: { "xi-api-key": env.ELEVENLABS_API_KEY } });
+    return res.ok || res.status === 404;
+  } catch { return false; }
+}
 async function tts(env, voiceId, text) {
   const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
     method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
@@ -297,6 +305,12 @@ async function api(request, env, url) {
     });
   }
 
+  if (p === "/api/voice/discard" && method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    if (!/^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") || b.voice_token !== await hmac(env, "voice:" + b.voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    return json({ ok: await deleteVoice(env, b.voice_id) });
+  }
+
   if (p === "/api/narrate" && method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     const { voice_id, voice_token, slug, section } = b; const text = String(b.text || "").trim();
@@ -324,7 +338,8 @@ async function api(request, env, url) {
     const ck = ownerKey(ownerId), old = await env.POSTERS.get(ck);
     await env.POSTERS.put(ck, slug);
     if (old && old !== slug) { await env.POSTERS.delete("poster:" + old); for (const k of SECTIONS) await env.POSTERS.delete(`audio:${old}:${k}`); }
-    return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString() });
+    const voiceDeleted = await deleteVoice(env, b.voice_id);
+    return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString(), voiceDeleted });
   }
 
   return err(404, "Not found.", "not_found");
