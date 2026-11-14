@@ -31,6 +31,11 @@ const MAX_SCRIPT = 2500;
 const COOKIE = "fpo";
 
 /* ---------------- small helpers ---------------- */
+/* Secrets pasted into the dashboard often carry a trailing newline, spaces or quotes;
+   any of those makes fetch() reject the header ("Invalid header value"). Clean them once. */
+const clean = v => String(v == null ? "" : v).replace(/[\s\u200b\ufeff]+/g, "").replace(/^["']+|["']+$/g, "");
+const KEYS = ["OPENAI_API_KEY", "ELEVENLABS_API_KEY", "TOKEN_SECRET"];
+function cleanEnv(env) { const e = Object.create(env); for (const k of KEYS) if (env[k] != null) e[k] = clean(env[k]); return e; }
 const json = (obj, status = 200, headers = {}) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } });
 const err = (status, message, code) => json({ error: { message, code: code || "error" } }, status);
@@ -346,7 +351,8 @@ async function api(request, env, url) {
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, rawEnv, ctx) {
+    const env = cleanEnv(rawEnv);
     const url = new URL(request.url), p = url.pathname;
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
