@@ -115,6 +115,7 @@ button{font:inherit}
 #ppod{display:block;width:100%;margin:calc(var(--u)*1.5) 0 calc(var(--u)*1);font-size:calc(var(--u)*3.8)!important;background:var(--gold)!important;color:var(--plum)!important;border:calc(var(--u)*.6) solid var(--paper)!important;padding:calc(var(--u)*1.4)!important;font-weight:bold}
 #pnowx{display:none}
 #pnow .lbl{align-items:center}
+body.podon .zone .pl{display:none}
 #pnow .hr{display:flex;align-items:center;gap:calc(var(--u)*1.5)}
 #pinfo{position:relative;display:inline-flex;align-items:center;justify-content:center;width:calc(var(--u)*4.4);height:calc(var(--u)*4.4);border-radius:50%;border:calc(var(--u)*.5) solid #9fd8ff;color:#9fd8ff;font-size:calc(var(--u)*3);font-weight:bold;font-style:italic;font-family:Georgia,serif;cursor:help;outline:none}
 #pinfo .tip{display:none;position:absolute;top:calc(100% + var(--u)*1.5);right:calc(var(--u)*-2);width:calc(var(--u)*70);z-index:20;background:var(--paper);color:var(--ink);border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*1.8) calc(var(--u)*2.2);font:normal calc(var(--u)*3.2)/1.45 "Courier New",ui-monospace,monospace;letter-spacing:0;text-align:left;box-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 var(--ink)}
@@ -303,6 +304,7 @@ function talk(who){$("wguest").classList.toggle("talk",who==="guest");$("whost")
 function stopNarration(){if(pAudio){try{pAudio.pause();}catch(e){}pAudio=null;}clearInterval(pTimer);document.querySelectorAll("#pmain .zone.playing").forEach(z=>z.classList.remove("playing"));pZone=null;syncZoom();}
 function playZone(key){
   if(!V)return;
+  if(POD.on&&!POD.paused)return;   // while the podcast plays, panels can be viewed but not narrated
   if(pZone===key){stopNarration();return;}
   stopPodcast();stopNarration();pZone=key;
   const src=document.querySelector('#pmain .zone[data-z="'+key+'"]');if(src)src.classList.add("playing");
@@ -319,9 +321,10 @@ $("pstop").onclick=()=>{stopPodcast();};
 const POD={i:0,audio:null,next:null,on:false,paused:false,sec:null,timer:0};
 const podUrl=i=>"/audio/"+V.slug+"/pod-"+i+".mp3";
 function podLines(){return (V&&V.data.poster.podcast&&V.data.poster.podcast.lines)||[];}
-function podLabel(){$("ppod").textContent=POD.on&&!POD.paused?"❚❚ Pause the podcast":POD.on?"▶ Resume the podcast":"▶ Play the podcast · ~3 min";}
+function podLabel(){document.body.classList.toggle("podon",POD.on&&!POD.paused);$("ppod").textContent=POD.on&&!POD.paused?"❚❚ Pause the podcast":POD.on?"▶ Resume the podcast":"▶ Play the podcast · ~3 min";}
 function zoomTo(sec){
-  if(sec===POD.sec)return;POD.sec=sec;
+  const open=$("pzoom").querySelector(".zone");
+  if(zoomOpen()&&open&&open.dataset.z===sec&&open.querySelector(".podtag"))return;POD.sec=sec;
   if(!sec){closeZoom();return;}
   const src=document.querySelector('#pmain .zone[data-z="'+sec+'"]');if(src){openZoom(src);const c=$("pzoom").querySelector(".zone");if(c){c.prepend(el("div","podtag","🎙 The podcast is on this panel"));const pl=c.querySelector(".pl");if(pl)pl.remove();}}
 }
