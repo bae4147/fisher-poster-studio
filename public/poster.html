@@ -120,12 +120,14 @@ button{font:inherit}
 @keyframes air{50%{box-shadow:0 0 calc(var(--u)*.8) #e11d48}}
 .pctl{display:flex;justify-content:space-between;align-items:center;gap:calc(var(--u)*2);font-size:calc(var(--u)*3.2);opacity:.85}
 /* ---- poster-session narration: shown inside the zoomed panel only ---- */
-.ntalk{display:flex;align-items:center;gap:calc(var(--u)*2.5);background:var(--gold);border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*1.5) calc(var(--u)*2.5);margin:0 0 calc(var(--u)*2.5)}
+#pzoom.on{flex-direction:column}
+.ntalk{align-self:flex-start;display:flex;align-items:center;gap:calc(var(--u)*2.5);background:var(--gold);border:calc(var(--u)*.6) solid var(--paper);padding:calc(var(--u)*1) calc(var(--u)*2.5);margin:auto 0 calc(var(--u)*2.5);width:calc(var(--u)*70);animation:pz .22s ease-out}
+.ntalk + .zone{margin-top:0!important}
 .ntalk svg{width:calc(var(--u)*13);height:calc(var(--u)*13);flex:0 0 auto;image-rendering:pixelated;animation:bob .5s ease-in-out infinite}
 .ntalk svg .mouth{transform-box:fill-box;transform-origin:center;animation:mouth .22s steps(2) infinite}
 .ntalk.done svg,.ntalk.done svg .mouth{animation:none}
 .ntalk .nt{flex:1;min-width:0;font-size:calc(var(--u)*3.6);font-weight:bold}
-.nbar{height:calc(var(--u)*1.4);background:#fff6d6;margin-top:calc(var(--u)*1.2)}
+.nbar{flex:1;height:calc(var(--u)*1.8);background:#fff6d6}
 .nbar i{display:block;height:100%;width:0;background:var(--ink)}
 .podtag{position:absolute;top:calc(var(--u)*-3.5);left:calc(var(--u)*3);background:#7c3aed;color:#fff;font-size:calc(var(--u)*3.2);padding:calc(var(--u)*.4) calc(var(--u)*2);border:calc(var(--u)*.5) solid var(--paper)}
 #pprog{height:calc(var(--u)*1.4);background:#0d0b18;margin:calc(var(--u)*1.5) 0;display:none}
@@ -292,7 +294,7 @@ async function loadMore(v){
 /* ---- narration ---- */
 let pAudio=null,pZone=null,pTimer=0;
 const firstName=()=>V?String(V.data.spokenName||V.data.displayName).replace(/^\s*((prof(essor)?|dr)\.?\s+)+/i,"").split(/\s+/)[0]:"the author";
-const PL_IDLE=()=>"🎤 Hear "+firstName()+" explain";
+const PL_IDLE=()=>"▶";
 function talk(who){$("wguest").classList.toggle("talk",who==="guest");$("whost").classList.toggle("talk",who==="host");$("stage").classList.toggle("duo",!!who);}
 function stopNarration(){if(pAudio){try{pAudio.pause();}catch(e){}pAudio=null;}clearInterval(pTimer);document.querySelectorAll("#pmain .zone.playing").forEach(z=>z.classList.remove("playing"));pZone=null;syncZoom();}
 function playZone(key){
@@ -350,7 +352,7 @@ $("ppod").onclick=startPodcast;
 function zoomOpen(){return $("pzoom").classList.contains("on");}
 function zoomScale(){const u=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"))||2;return (u*1.55)+"px";}
 function openZoom(src){
-  const zb=$("pzoom");zb.querySelectorAll(".zone").forEach(n=>n.remove());
+  const zb=$("pzoom");zb.querySelectorAll(".zone,.ntalk").forEach(n=>n.remove());
   const c=src.cloneNode(true);c.classList.remove("wide");c.style.setProperty("--u",zoomScale());
   const lr=$("pleft").getBoundingClientRect(),zr=src.getBoundingClientRect();
   c.style.setProperty("--ox",(zr.left+zr.width/2-lr.left)+"px");c.style.setProperty("--oy",(zr.top+zr.height/2-lr.top)+"px");
@@ -360,12 +362,13 @@ function openZoom(src){
 }
 function syncZoom(){
   const c=$("pzoom").querySelector(".zone");if(!c)return;const on=pZone===c.dataset.z;c.classList.toggle("playing",on);
-  const pl=c.querySelector(".pl");if(pl)pl.textContent=on?"■ Stop":PL_IDLE();
-  let t=c.querySelector(".ntalk");
-  if(on&&!t){t=el("div","ntalk");t.innerHTML=$("wguest").querySelector("svg").outerHTML;const nt=el("div","nt",firstName()+" is walking you through this panel");const bar=el("div","nbar");bar.append(el("i"));nt.append(bar);t.append(nt);c.querySelector("h4").after(t);}
+  const pl=c.querySelector(".pl");if(pl){pl.textContent=on?"■":PL_IDLE();pl.title=on?"Stop":"Hear "+firstName()+" explain this panel";}
+  /* the talking author sits just above the zoomed panel, outside it */
+  let t=$("pzoom").querySelector(".ntalk");
+  if(on&&!t){t=el("div","ntalk");t.style.setProperty("--u",zoomScale());t.innerHTML=$("wguest").querySelector("svg").outerHTML;const bar=el("div","nbar");bar.append(el("i"));t.append(bar);t.addEventListener("click",e=>e.stopPropagation());$("pzoom").insertBefore(t,c);}
   if(!on&&t)t.remove();
 }
-function closeZoom(){$("pzoom").classList.remove("on");$("pzoom").querySelectorAll(".zone").forEach(n=>n.remove());}
+function closeZoom(){$("pzoom").classList.remove("on");$("pzoom").querySelectorAll(".zone,.ntalk").forEach(n=>n.remove());}
 $("pzoom").addEventListener("click",()=>closeZoom());
 $("pzx").addEventListener("click",e=>{e.stopPropagation();closeZoom();});
 addEventListener("keydown",e=>{if(e.key==="Escape"&&zoomOpen()){e.preventDefault();closeZoom();}});
