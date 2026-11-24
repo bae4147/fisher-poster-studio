@@ -321,21 +321,26 @@ async function hostVoice(env, refresh = false) {
    A vision call reads a few visible traits (skin tone, hair, glasses, facial hair, clothing); the page then
    assembles a 16 x 16 sprite from fixed parts (public/lib/sprite.js). The photo itself is never stored. */
 const MAX_PHOTO = 8 * 1024 * 1024;
-const HAIR_STYLES = ["short", "side_part", "spiky", "curly", "medium", "long", "bun", "buzz", "bald"];
+const HAIR_STYLES = ["short", "spiky", "curly", "medium", "long", "bangs", "bun", "buzz", "bald"];
+const LOOK_ENUMS = { hair_volume: ["flat", "normal", "tall"], hair_part: ["left", "right", "center", "none"], face_shape: ["oval", "round", "long", "square"],
+  eyebrows: ["thin", "thick"], smile: ["none", "slight", "big"], glasses: ["none", "clear", "dark"], facial_hair: ["none", "stubble", "mustache", "beard"] };
 const TOPS = ["suit_tie", "suit", "shirt", "sweater", "blouse", "tshirt"];
-const LOOK_SCHEMA = { type: "object", additionalProperties: false, required: ["skin", "hair_color", "hair_style", "glasses", "facial_hair", "top", "top_color", "tie_color"], properties: {
-  skin: S("Skin tone as a hex color like #b07a55"), hair_color: S("Hair color as a hex color"),
-  hair_style: { type: "string", enum: HAIR_STYLES }, glasses: { type: "string", enum: ["none", "clear", "dark"] },
-  facial_hair: { type: "string", enum: ["none", "stubble", "mustache", "beard"] },
+const LOOK_SCHEMA = { type: "object", additionalProperties: false, required: ["skin", "hair_color", "hair_style", ...Object.keys(LOOK_ENUMS), "top", "top_color", "tie_color"], properties: {
+  skin: S("Skin tone as a hex color sampled from the face, like #b07a55"), hair_color: S("Hair color as a hex color (gray or white if graying)"),
+  hair_style: { type: "string", enum: HAIR_STYLES, description: "short = short hair on top; bangs = fringe covering the forehead; medium = to the jaw; long = past the shoulders" },
+  hair_volume: { type: "string", enum: LOOK_ENUMS.hair_volume, description: "How high the hair rises above the head" },
+  hair_part: { type: "string", enum: LOOK_ENUMS.hair_part, description: "Which side the hair is parted or swept to, from the viewer's point of view" },
+  face_shape: { type: "string", enum: LOOK_ENUMS.face_shape }, eyebrows: { type: "string", enum: LOOK_ENUMS.eyebrows },
+  smile: { type: "string", enum: LOOK_ENUMS.smile, description: "big = open smile showing teeth" },
+  glasses: { type: "string", enum: LOOK_ENUMS.glasses }, facial_hair: { type: "string", enum: LOOK_ENUMS.facial_hair },
   top: { type: "string", enum: TOPS }, top_color: S("Main clothing color as hex (jacket if wearing one)"), tie_color: S("Tie color as hex, or #000000 if no tie") } };
 /* AC's look, read from the photo he provided; used until a host character is saved from /admin.html */
-const BUILTIN_HOST_LOOKS = { ac: { skin: "#b07a55", hair_color: "#1b1b1f", hair_style: "side_part", glasses: "none", facial_hair: "none", top: "suit_tie", top_color: "#1f1f26", tie_color: "#c45a6a" } };
+const BUILTIN_HOST_LOOKS = { ac: { skin: "#b07a55", hair_color: "#1b1b1f", hair_style: "short", hair_volume: "tall", hair_part: "left", face_shape: "oval", eyebrows: "thick", smile: "big", glasses: "none", facial_hair: "none", top: "suit_tie", top_color: "#1f1f26", tie_color: "#c45a6a" } };
 function cleanLook(j) {
   const hex = (v, d) => /^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v) : d;
   return { skin: hex(j?.skin, "#c98f62"), hair_color: hex(j?.hair_color, "#2b2b2b"),
-    hair_style: HAIR_STYLES.includes(j?.hair_style) ? j.hair_style : "short",
-    glasses: ["none", "clear", "dark"].includes(j?.glasses) ? j.glasses : "none",
-    facial_hair: ["none", "stubble", "mustache", "beard"].includes(j?.facial_hair) ? j.facial_hair : "none",
+    hair_style: HAIR_STYLES.includes(j?.hair_style) ? j.hair_style : (j?.hair_style === "side_part" ? "short" : "short"),
+    ...Object.fromEntries(Object.entries(LOOK_ENUMS).map(([k, v]) => [k, v.includes(j?.[k]) ? j[k] : (k === "hair_part" && j?.hair_style === "side_part" ? "left" : { hair_volume: "normal", hair_part: "none", face_shape: "oval", eyebrows: "thin", smile: "slight", glasses: "none", facial_hair: "none" }[k])])),
     top: TOPS.includes(j?.top) ? j.top : "shirt", top_color: hex(j?.top_color, "#2e4a7a"), tie_color: hex(j?.tie_color, "#c2410c") };
 }
 async function describeLook(env, bytes, type) {
@@ -343,7 +348,7 @@ async function describeLook(env, bytes, type) {
   const body = {
     model: env.OPENAI_LOOK_MODEL || env.OPENAI_CHAT_MODEL || "gpt-6-luna",
     input: [{ role: "user", content: [
-      { type: "input_text", text: "Describe this person's visible appearance so a very simple 16x16 pixel-art character can be drawn of them. Report only what the photo clearly shows: choose glasses or facial hair only if they are plainly visible. Colors as hex codes sampled from the photo." },
+      { type: "input_text", text: "Describe this person's visible appearance so a very simple 16x16 pixel-art character can be drawn of them. Report only what the photo clearly shows: choose glasses or facial hair only if they are plainly visible. Pay attention to what makes this face distinctive (hair height and parting, face shape, eyebrows, smile) so different people come out looking different. Colors as hex codes sampled from the photo." },
       { type: "input_image", image_url: `data:${type};base64,${btoa(bin)}`, detail: "low" } ] }],
     text: { format: { type: "json_schema", name: "look", strict: true, schema: LOOK_SCHEMA } }
   };
@@ -578,7 +583,7 @@ export default {
       const av = p.match(/^\/avatar\/(host-(ac|hun)|[a-z0-9]{6,20})\.json$/);
       if (av) {
         let look = await env.POSTERS.get(av[2] ? `host_avatar:${av[2]}` : `avatar:${av[1]}`, "json");
-        if (!look && av[2]) look = BUILTIN_HOST_LOOKS[av[2]] || null;
+        if (av[2] && BUILTIN_HOST_LOOKS[av[2]] && !(look && look.face_shape)) look = BUILTIN_HOST_LOOKS[av[2]];   // older saves lack the newer traits
         if (!look) return new Response("Not found", { status: 404 });
         return new Response(JSON.stringify(cleanLook(look)), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300" } });
       }
