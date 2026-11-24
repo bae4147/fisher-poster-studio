@@ -132,7 +132,8 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
     <div class="s" data-k="sample">2. Preparing your voice sample</div>
     <div class="s" data-k="clone">3. Creating your voice clone</div>
     <div class="s" data-k="narr">4. Recording narration <span id="narrn"></span></div>
-    <div class="s" data-k="save">5. Saving your poster</div>
+    <div class="s" data-k="pod">5. Recording the podcast <span id="podn"></span></div>
+    <div class="s" data-k="save">6. Saving your poster</div>
    </div>
    <div id="builderr" class="notice err hidden" style="margin-top:12px"></div>
    <div id="builddone" class="notice hidden" style="margin-top:12px"></div>
@@ -330,7 +331,7 @@ function check(){
 $("dname").addEventListener("input",check);
 [["intro","introc"],["motiv","motivc"]].forEach(([a,b])=>$(a).addEventListener("input",()=>{$(b).textContent=$(a).value.length+" / 1200";}));
 $("consent").addEventListener("change",check);
-function step(k,cls,extra){const el=document.querySelector('#log .s[data-k="'+k+'"]');if(!el)return;el.classList.remove("on","done","fail");if(cls)el.classList.add(cls);if(extra!==undefined&&k==="narr")$("narrn").textContent=extra;}
+function step(k,cls,extra){const el=document.querySelector('#log .s[data-k="'+k+'"]');if(!el)return;el.classList.remove("on","done","fail");if(cls)el.classList.add(cls);if(extra!==undefined&&k==="narr")$("narrn").textContent=extra;if(extra!==undefined&&k==="pod")$("podn").textContent=extra;}
 const friendly=e=>{
   if(e&&e.code==="no_session")return 'Please <a href="/">reload the page</a> and try again.';
   return esc(e&&e.message||"Something went wrong.");
@@ -339,7 +340,7 @@ const friendly=e=>{
 $("build").onclick=async()=>{
   if(building)return;building=true;check();
   $("builderr").classList.add("hidden");$("builddone").classList.add("hidden");$("log").classList.remove("hidden");
-  document.querySelectorAll("#log .s").forEach(s=>s.classList.remove("on","done","fail"));$("narrn").textContent="";
+  document.querySelectorAll("#log .s").forEach(s=>s.classList.remove("on","done","fail"));$("narrn").textContent="";$("podn").textContent="";
   const name=$("dname").value.trim(),spoken=spokenFrom(name);let cur="poster",v=null,published=false;
   try{
     step("poster","on");
@@ -365,6 +366,17 @@ $("build").onclick=async()=>{
       catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
     }
     step("narr","done","("+SECTIONS.length+"/"+SECTIONS.length+")");
+
+    cur="pod";
+    const L=(poster.podcast&&poster.podcast.lines)||[];
+    for(const [i,l] of L.entries()){
+      step("pod","on","("+(i+1)+"/"+L.length+")");
+      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,index:i,speaker:l.speaker,text:l.text,
+        previous_text:L.slice(Math.max(0,i-2),i).filter(x=>x.speaker===l.speaker).map(x=>x.text).join(" "),next_text:""});
+      try{await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}
+      catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+    }
+    step("pod","done","("+L.length+"/"+L.length+")");
 
     cur="save";step("save","on");
     const r=await call("/api/publish",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:v.slug,voice_id:v.voice_id,voice_token:v.voice_token,displayName:name,spokenName:spoken,poster})});

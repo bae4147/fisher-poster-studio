@@ -30,6 +30,8 @@ const MAX_NOTE = 1500; // author-written introduction / motivation text
 const MAX_PDF = 30 * 1024 * 1024;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
+const MAX_POD_LINES = 26, MAX_POD_LINE = 700;
+const HOST_NAME = "Jordan";
 const COOKIE = "fpo";
 
 /* ---------------- small helpers ---------------- */
@@ -101,7 +103,7 @@ const NODE = { type: "object", additionalProperties: false, required: ["label", 
   label: S("Construct name, 1-4 plain words"), sign: { type: "string", enum: ["+", "-", ""], description: "Direction of its effect on the next box to the right (for moderators: how it changes the link); empty if not stated" } } };
 const POSTER_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "brief", "suggested_questions"],
+  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "podcast", "brief", "suggested_questions"],
   properties: {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
@@ -134,6 +136,11 @@ const POSTER_SCHEMA = {
       icon: ICON(), headline: S("The practical lesson, max 12 words"),
       tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
     scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
+    podcast: { type: "object", additionalProperties: false, required: ["lines"], description: "A 3-minute two-person podcast conversation about the paper", properties: {
+      lines: { type: "array", description: "16-22 turns alternating host and guest, 420-480 words in total", items: { type: "object", additionalProperties: false, required: ["speaker", "text", "section"], properties: {
+        speaker: { type: "string", enum: ["host", "guest"] },
+        text: S("What this speaker says in this turn, 8-60 words"),
+        section: { type: "string", enum: [...SECTIONS, ""], description: "The poster panel this turn is mainly about, so the poster can zoom to it; empty for greetings and small talk" } } } } } },
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
   }
@@ -159,6 +166,15 @@ Narration scripts (read aloud by an AI voice of the author; introduction and mot
 - scripts.introduction must start with "Hi, I'm ${spoken}, and thanks for stopping by." The other scripts continue the talk without greeting again.
 - Write every number as words a speaker would say (for example "five hundred twenty-four", "point five nine").
 - No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.
+
+Podcast (about 3 minutes, 420-480 words, 16-22 turns):
+- Two speakers: the host, ${HOST_NAME}, a curious, friendly interviewer for Fisher College of Business research conversations; and the guest, ${spoken}, the author.
+- The first turn is the host: one short welcome sentence that names the guest, then exactly this question: "What made you or the research team think about this question?"
+- The guest answers using only the motivation the paper states and anything the author wrote in their own notes. Do not invent personal stories, conversations or experiences.
+- Then walk through the idea, how it was studied, what was found, and what people should take away. The host asks short questions and reacts naturally; the guest explains with simple examples. Each turn is 8-60 words.
+- The guest speaks for the team ("we", "our team") and may mention co-authors by name.
+- Tag each turn with the poster panel it is mainly about (introduction, motivation, narrative, findings, methods, takeaway), or leave it empty for greetings and the goodbye.
+- The last turn is the host thanking the guest. Same rules as narration: only facts from the paper, numbers written as spoken words, no symbols or abbreviations.
 
 Author's own notes:
 - The author may supply their own text for the introduction or motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
@@ -218,6 +234,7 @@ function cleanPoster(j) {
     methods: { icon: Ic(j.methods?.icon), studies: A(j.methods?.studies, 4).map(s => ({ icon: Ic(s?.icon), name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
     takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
+    podcast: { host: HOST_NAME, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
   if (!p.title || !p.introduction.headline || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
@@ -242,10 +259,11 @@ async function deleteVoice(env, voiceId) {
     return res.ok || res.status === 404;
   } catch { return false; }
 }
-async function tts(env, voiceId, text) {
+async function tts(env, voiceId, text, ctx = {}) {
   const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
     method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: env.MODEL_ID || "eleven_multilingual_v2", voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+    body: JSON.stringify({ text, model_id: env.MODEL_ID || "eleven_multilingual_v2", voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      ...(ctx.previous_text ? { previous_text: ctx.previous_text.slice(-600) } : {}), ...(ctx.next_text ? { next_text: ctx.next_text.slice(0, 600) } : {}) })
   });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
   return res.arrayBuffer();
@@ -305,7 +323,7 @@ async function api(request, env, url) {
     const v = await env.POSTERS.get("poster:" + m[1], "json");
     if (!v) return err(404, "Poster not found.", "not_found");
     const { brief, ...pub } = v.poster;
-    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, poster: pub });
+    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, podcast: v.podcast || 0, poster: pub });
   }
 
   if (p === "/api/chat" && method === "POST") {
@@ -376,6 +394,20 @@ async function api(request, env, url) {
     });
   }
 
+  if (p === "/api/podcast-line" && method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const { voice_id, voice_token, slug } = b; const text = String(b.text || "").trim(), i = Number(b.index);
+    if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id || "") || voice_token !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    if (!/^[a-z0-9]{6,20}$/.test(slug || "") || !Number.isInteger(i) || i < 0 || i >= MAX_POD_LINES) return err(400, "Bad request.", "bad_request");
+    if (!text || text.length > MAX_POD_LINE) return err(400, "The line is empty or too long.", "bad_request");
+    const voice = b.speaker === "host" ? (env.HOST_VOICE_ID || "EXAVITQu4vr4xnwDTk1Y") : voice_id;
+    return slowJson(async () => {
+      const audio = await tts(env, voice, text, { previous_text: String(b.previous_text || ""), next_text: String(b.next_text || "") });
+      await env.POSTERS.put(`audio:${slug}:pod-${i}`, audio, { metadata: { bytes: audio.byteLength } });
+      return { ok: true, bytes: audio.byteLength };
+    });
+  }
+
   if (p === "/api/publish" && method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     const slug = String(b.slug || "");
@@ -385,11 +417,18 @@ async function api(request, env, url) {
     const displayName = String(b.displayName || "").trim().slice(0, 80), spokenName = String(b.spokenName || "").trim().slice(0, 60);
     if (!displayName) return err(400, "Name is missing.", "bad_request");
     for (const k of SECTIONS) if (!(await env.POSTERS.get(`audio:${slug}:${k}`, "arrayBuffer"))) return err(400, "Narration for " + k + " is missing. Build again.", "missing_audio");
+    const podN = poster.podcast.lines.length;
+    for (let i = 0; i < podN; i++) if (!(await env.POSTERS.get(`audio:${slug}:pod-${i}`, "arrayBuffer"))) return err(400, "Podcast audio is missing. Build again.", "missing_audio");
     const createdAt = Date.now();
-    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
+    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
     const ck = ownerKey(ownerId), old = await env.POSTERS.get(ck);
     await env.POSTERS.put(ck, slug);
-    if (old && old !== slug) { await env.POSTERS.delete("poster:" + old); for (const k of SECTIONS) await env.POSTERS.delete(`audio:${old}:${k}`); }
+    if (old && old !== slug) {
+      const ov = await env.POSTERS.get("poster:" + old, "json");
+      await env.POSTERS.delete("poster:" + old);
+      for (const k of SECTIONS) await env.POSTERS.delete(`audio:${old}:${k}`);
+      for (let i = 0; i < ((ov && ov.podcast) || 0); i++) await env.POSTERS.delete(`audio:${old}:pod-${i}`);
+    }
     const voiceDeleted = await deleteVoice(env, b.voice_id);
     return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString(), voiceDeleted });
   }
@@ -404,7 +443,7 @@ export default {
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
       if (p.startsWith("/api/")) return await api(request, env, url);
-      let m = p.match(new RegExp("^/audio/([a-z0-9]{6,20})/(" + SECTIONS.join("|") + ")\\.mp3$"));
+      let m = p.match(new RegExp("^/audio/([a-z0-9]{6,20})/(" + SECTIONS.join("|") + "|pod-\\d{1,2})\\.mp3$"));
       if (m) {
         const buf = await env.POSTERS.get(`audio:${m[1]}:${m[2]}`, "arrayBuffer");
         if (!buf) return new Response("Not found", { status: 404 });
