@@ -24,7 +24,9 @@
 import mcp from "./mcp.js";
 import { LEE_SYSTEM } from "./lee.js";
 
-const SECTIONS = ["narrative", "findings", "methods", "takeaway"];
+const SECTIONS = ["introduction", "motivation", "narrative", "findings", "methods", "takeaway"];
+const SHORT_SECTIONS = ["introduction", "motivation"];
+const MAX_NOTE = 1500; // author-written introduction / motivation text
 const MAX_PDF = 30 * 1024 * 1024;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
@@ -94,14 +96,20 @@ function outputText(data) {
 const S = (desc, extra = {}) => ({ type: "string", description: desc, ...extra });
 const POSTER_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["title", "authors", "venue", "narrative", "findings", "methods", "takeaway", "scripts", "brief", "suggested_questions"],
+  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "brief", "suggested_questions"],
   properties: {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
     venue: S("Journal or outlet, year, volume/article info if present"),
+    introduction: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
+      headline: S("One-sentence hook that introduces the topic, max 22 words"),
+      paragraphs: { type: "array", items: S("35-60 words"), description: "1-2 short paragraphs: the topic, the background, and the research question" } } },
+    motivation: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
+      headline: S("Why this question matters, one sentence, max 20 words"),
+      paragraphs: { type: "array", items: S("35-60 words"), description: "1-2 short paragraphs: the real-world problem and the gap in what we knew that made this study worth doing" } } },
     narrative: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
-      headline: S("One-sentence hook, max 22 words"),
-      paragraphs: { type: "array", items: S("35-60 words"), description: "Exactly 2 short paragraphs: the question and why it matters; the theoretical idea" } } },
+      headline: S("The core idea in one sentence, max 22 words"),
+      paragraphs: { type: "array", items: S("35-60 words"), description: "Exactly 2 short paragraphs: the theoretical idea; what we predicted and why" } } },
     findings: { type: "object", additionalProperties: false, required: ["headline", "points", "stats"], properties: {
       headline: S("Main result in one sentence, max 22 words"),
       points: { type: "array", items: S("Max 28 words, plain language"), description: "3-4 key findings" },
@@ -114,7 +122,7 @@ const POSTER_SCHEMA = {
     takeaway: { type: "object", additionalProperties: false, required: ["headline", "tips"], properties: {
       headline: S("The practical lesson in one sentence, max 18 words"),
       tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["title", "text"], properties: { title: S("2-5 words"), text: S("Max 24 words") } } } } },
-    scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, 130-165 words")])) },
+    scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
   }
@@ -127,14 +135,20 @@ Accuracy rules:
 - If a hypothesis was not supported or a result did not replicate, say so plainly.
 
 Content rules:
+- The panels run in this order and must not repeat each other: introduction (topic and research question), motivation (why it matters and what was missing), narrative (theory and predictions), findings, methods, takeaway.
 - methods.studies: 1-4 items, grouping extra studies. takeaway.tips: exactly 3. findings.stats: 2-4 items, only numbers that appear in the paper.
 - brief: research question, theory, hypotheses and which were supported, every study's sample and design, key numbers, boundary conditions, limitations, future directions, practical implications.
 
-Narration scripts (read aloud by an AI voice of the author, about 55-65 seconds each, 130-165 words):
+Narration scripts (read aloud by an AI voice of the author; introduction and motivation 70-100 words, about 30-40 seconds; the other four 130-165 words, about 55-65 seconds):
 - First person, warm and conversational, the author speaking to a visitor at their poster ("we found", "in our second study").
-- scripts.narrative must start with "Hi, I'm ${spoken}, and thanks for stopping by."
+- scripts.introduction must start with "Hi, I'm ${spoken}, and thanks for stopping by." The other scripts continue the talk without greeting again.
 - Write every number as words a speaker would say (for example "five hundred twenty-four", "point five nine").
-- No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.`;
+- No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.
+
+Author's own notes:
+- The author may supply their own text for the introduction or motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
+- Facts about the study in their notes must still agree with the paper; if they conflict, follow the paper.
+- When a panel has no author text, draft it from the paper.`;
 
 async function uploadPdf(env, bytes, filename) {
   const fd = new FormData();
@@ -144,7 +158,13 @@ async function uploadPdf(env, bytes, filename) {
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI (file upload)"), "upstream");
   return (await res.json()).id;
 }
-async function draftPoster(env, fileId, spoken) {
+function notesText(notes) {
+  const parts = [];
+  if (notes.introduction) parts.push("The author's own text for the INTRODUCTION panel:\n<<<\n" + notes.introduction + "\n>>>");
+  if (notes.motivation) parts.push("The author's own text for the MOTIVATION panel:\n<<<\n" + notes.motivation + "\n>>>");
+  return parts.length ? "\n\n" + parts.join("\n\n") : "";
+}
+async function draftPoster(env, fileId, spoken, notes = {}) {
   const body = {
     model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
     reasoning: { effort: env.OPENAI_REASONING || "medium" },
@@ -152,7 +172,7 @@ async function draftPoster(env, fileId, spoken) {
       { role: "system", content: posterSystem(spoken) },
       { role: "user", content: [
         { type: "input_file", file_id: fileId, detail: env.PDF_DETAIL || "low" },
-        { type: "input_text", text: "Create the poster content for this paper." } ] } ],
+        { type: "input_text", text: "Create the poster content for this paper." + notesText(notes) } ] } ],
     text: { format: { type: "json_schema", name: "poster", strict: true, schema: POSTER_SCHEMA } }
   };
   const res = await fetch(`${openaiBase(env)}/v1/responses`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -167,6 +187,8 @@ function cleanPoster(j) {
   const A = (v, n) => Array.isArray(v) ? v.slice(0, n) : [];
   const p = {
     title: St(j.title, 300), authors: A(j.authors, 20).map(x => St(x, 80)).filter(Boolean), venue: St(j.venue, 200),
+    introduction: { headline: St(j.introduction?.headline, 240), paragraphs: A(j.introduction?.paragraphs, 2).map(x => St(x, 600)).filter(Boolean) },
+    motivation: { headline: St(j.motivation?.headline, 240), paragraphs: A(j.motivation?.paragraphs, 2).map(x => St(x, 600)).filter(Boolean) },
     narrative: { headline: St(j.narrative?.headline, 240), paragraphs: A(j.narrative?.paragraphs, 3).map(x => St(x, 600)).filter(Boolean) },
     findings: { headline: St(j.findings?.headline, 240), points: A(j.findings?.points, 5).map(x => St(x, 300)).filter(Boolean),
       stats: A(j.findings?.stats, 4).map(s => ({ value: St(s?.value, 16), label: St(s?.label, 90) })).filter(s => s.value) },
@@ -175,7 +197,7 @@ function cleanPoster(j) {
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
-  if (!p.title || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
+  if (!p.title || !p.introduction.headline || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
   return p;
 }
 
@@ -287,13 +309,15 @@ async function api(request, env, url) {
     if (!bytes.byteLength) return err(400, "No PDF received.", "bad_request");
     if (bytes.byteLength > MAX_PDF) return err(413, "That PDF is larger than 30 MB.", "too_large");
     if (!spoken) return err(400, "Name is missing.", "bad_request");
+    const note = h => { let t = ""; try { t = decodeURIComponent(request.headers.get(h) || ""); } catch {} return t.replace(/\r/g, "").trim().slice(0, MAX_NOTE); };
+    const notes = { introduction: note("x-introduction"), motivation: note("x-motivation") };
     const day = "count:" + new Date().toISOString().slice(0, 10), limit = parseInt(env.DAILY_BUILD_LIMIT || "20", 10);
     const used = parseInt(await env.POSTERS.get(day) || "0", 10);
     if (used >= limit) return err(429, "The studio has reached today's limit of " + limit + " posters. Please try again tomorrow.", "daily_limit");
     await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
     return slowJson(async () => {
       const fileId = await uploadPdf(env, bytes, fname);
-      try { return { poster: await draftPoster(env, fileId, spoken) }; }
+      try { return { poster: await draftPoster(env, fileId, spoken, notes) }; }
       finally { fetch(`${openaiBase(env)}/v1/files/${fileId}`, { method: "DELETE", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } }).catch(() => {}); }
     });
   }
@@ -357,7 +381,7 @@ export default {
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
       if (p.startsWith("/api/")) return await api(request, env, url);
-      let m = p.match(/^\/audio\/([a-z0-9]{6,20})\/(narrative|findings|methods|takeaway)\.mp3$/);
+      let m = p.match(new RegExp("^/audio/([a-z0-9]{6,20})/(" + SECTIONS.join("|") + ")\\.mp3$"));
       if (m) {
         const buf = await env.POSTERS.get(`audio:${m[1]}:${m[2]}`, "arrayBuffer");
         if (!buf) return new Response("Not found", { status: 404 });

@@ -120,8 +120,9 @@ button{font:inherit}
 <script>
 (()=>{
 "use strict";
-const SECTIONS=["narrative","findings","methods","takeaway"];
-const SEC_TITLES={narrative:"Research narrative",findings:"Key findings",methods:"Research methods",takeaway:"Practical takeaway"};
+const ALL_SECTIONS=["introduction","motivation","narrative","findings","methods","takeaway"];
+let SECTIONS=["narrative","findings","methods","takeaway"];
+const SEC_TITLES={introduction:"Introduction",motivation:"Motivation",narrative:"Research narrative",findings:"Key findings",methods:"Research methods",takeaway:"Practical takeaway"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s);
 /* ============================ VIEWER ============================ */
@@ -134,6 +135,7 @@ async function openViewer(slug){
   let v;
   try{const res=await fetch("/api/posters/"+slug);if(res.status===404){$("vmsg").innerHTML='This poster was not found. <a href="/">Go to Fisher Poster Studio</a>';return;}v=await res.json();if(v.error)throw 0;}
   catch(e){$("vmsg").textContent="Could not load this poster. Please try again.";return;}
+  SECTIONS=Array.isArray(v.audio)&&v.audio.length?ALL_SECTIONS.filter(k=>v.audio.includes(k)):SECTIONS;
   V={slug,data:v,urls:{},chat:[],chatInit:false};
   SECTIONS.forEach(k=>{V.urls[k]="/audio/"+slug+"/"+k+".mp3";});
   document.title=v.poster.title+" · Interactive poster";
@@ -145,11 +147,13 @@ function renderPoster(v){
   const p=v.poster,m=$("pmain");m.innerHTML="";
   const head=el("div");head.id="phead";head.append(el("div","tag","INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN"),el("h2",null,p.title));
   const au=el("div","au");p.authors.forEach((a,i)=>{if(i)au.append(", ");au.append(a===v.displayName||v.displayName.includes(a)||a.includes(v.spokenName||"\u0000")?el("b",null,a):document.createTextNode(a));});if(p.venue){au.append(" · ");au.append(el("i",null,p.venue));}head.append(au);m.append(head);
-  const z1=zoneEl("narrative","1",SEC_TITLES.narrative);z1.append(el("p","big",p.narrative.headline));p.narrative.paragraphs.forEach(t=>z1.append(el("p",null,t)));m.append(z1);
-  const z2=zoneEl("findings","2",SEC_TITLES.findings);z2.append(el("p","big",p.findings.headline));const ul=el("ul");p.findings.points.forEach(t=>ul.append(el("li",null,t)));z2.append(ul);
+  let num=0;const N=()=>String(++num);
+  const textZone=k=>{const sec=p[k];if(!sec||!sec.headline||!SECTIONS.includes(k))return;const z=zoneEl(k,N(),SEC_TITLES[k]);z.append(el("p","big",sec.headline));(sec.paragraphs||[]).forEach(t=>z.append(el("p",null,t)));m.append(z);};
+  textZone("introduction");textZone("motivation");textZone("narrative");
+  const z2=zoneEl("findings",N(),SEC_TITLES.findings);z2.append(el("p","big",p.findings.headline));const ul=el("ul");p.findings.points.forEach(t=>ul.append(el("li",null,t)));z2.append(ul);
   if(p.findings.stats.length){const sg=el("div","stats");p.findings.stats.forEach(s=>{const d=el("div","stat");d.append(el("b",null,s.value),el("span",null,s.label));sg.append(d);});z2.append(sg);}m.append(z2);
-  const z3=zoneEl("methods","3",SEC_TITLES.methods,true);const sts=el("div","studies");p.methods.studies.forEach(s=>{const d=el("div","st");d.append(el("b",null,s.name),document.createTextNode(s.detail));if(s.tag){d.append(el("br"));d.append(el("span","k",s.tag));}sts.append(d);});z3.append(sts);if(p.methods.note){const n=el("p",null,p.methods.note);n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
-  const z4=zoneEl("takeaway","4",SEC_TITLES.takeaway,true);z4.append(el("p","big",p.takeaway.headline));const dd=el("div","do");p.takeaway.tips.forEach(t=>{const d=el("div");d.append(el("b",null,t.title+". "),document.createTextNode(t.text));dd.append(d);});z4.append(dd);m.append(z4);
+  const z3=zoneEl("methods",N(),SEC_TITLES.methods,true);const sts=el("div","studies");p.methods.studies.forEach(s=>{const d=el("div","st");d.append(el("b",null,s.name),document.createTextNode(s.detail));if(s.tag){d.append(el("br"));d.append(el("span","k",s.tag));}sts.append(d);});z3.append(sts);if(p.methods.note){const n=el("p",null,p.methods.note);n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
+  const z4=zoneEl("takeaway",N(),SEC_TITLES.takeaway,true);z4.append(el("p","big",p.takeaway.headline));const dd=el("div","do");p.takeaway.tips.forEach(t=>{const d=el("div");d.append(el("b",null,t.title+". "),document.createTextNode(t.text));dd.append(d);});z4.append(dd);m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
   m.querySelectorAll(".zone").forEach(z=>z.addEventListener("click",()=>{openZoom(z);if(pZone!==z.dataset.z)playZone(z.dataset.z);}));
   $("pnowt").textContent="NOW PLAYING · nothing yet";$("pnowx").textContent="Click a panel on the poster to hear that section from "+v.displayName+".";
