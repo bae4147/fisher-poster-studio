@@ -26,7 +26,7 @@
     "KEEP_VOICE_CLONES": "true",
     // Podcast hosts: ElevenLabs voice IDs of the professors' existing, consented clones (Voices → My Voices → the voice → ID).
     // AC hosts by default; Hun Whee Lee hosts when AC is the author. Leave empty to use the stock AI host.
-    "HOST_AC_VOICE_ID": "",
-    "HOST_HUN_VOICE_ID": ""
+    "HOST_AC_VOICE_ID": "FsQdQPew15UMIJARAw9l",
+    "HOST_HUN_VOICE_ID": "slZT8qWxuuSRDgAzN5N0"
   }
 }
