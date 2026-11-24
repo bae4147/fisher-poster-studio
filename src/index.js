@@ -32,6 +32,8 @@ const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
 const MAX_POD_LINES = 26, MAX_POD_LINE = 700;
 const HOST_NAME = "Jordan";
+/* Testing switch (wrangler.jsonc var KEEP_VOICE_CLONES = "true"): keep voice clones in ElevenLabs instead of deleting them. */
+const keepClones = env => String(env.KEEP_VOICE_CLONES || "").toLowerCase() === "true";
 const COOKIE = "fpo";
 
 /* ---------------- small helpers ---------------- */
@@ -325,7 +327,7 @@ async function api(request, env, url) {
   const p = url.pathname, method = request.method;
 
   if (p === "/api/status") {
-    return json({ openai: !!env.OPENAI_API_KEY, elevenlabs: !!env.ELEVENLABS_API_KEY, token: !!env.TOKEN_SECRET, storage: !!env.POSTERS });
+    return json({ openai: !!env.OPENAI_API_KEY, elevenlabs: !!env.ELEVENLABS_API_KEY, token: !!env.TOKEN_SECRET, storage: !!env.POSTERS, keepVoices: keepClones(env) });
   }
   if (p === "/api/me") {
     let id = await owner(request, env), headers = {};
@@ -407,6 +409,7 @@ async function api(request, env, url) {
   if (p === "/api/voice/discard" && method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     if (!/^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") || b.voice_token !== await hmac(env, "voice:" + b.voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    if (keepClones(env)) return json({ ok: true, kept: true });
     return json({ ok: await deleteVoice(env, b.voice_id) });
   }
 
@@ -461,7 +464,7 @@ async function api(request, env, url) {
     /* Every build gets its own permanent link; earlier posters are kept. */
     const ck = ownerKey(ownerId), list = ownedSlugs(await env.POSTERS.get(ck));
     await env.POSTERS.put(ck, JSON.stringify([slug, ...list.filter(x => x !== slug)].slice(0, 200)));
-    const voiceDeleted = await deleteVoice(env, b.voice_id);
+    const voiceDeleted = keepClones(env) ? false : await deleteVoice(env, b.voice_id);
     return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString(), voiceDeleted });
   }
 

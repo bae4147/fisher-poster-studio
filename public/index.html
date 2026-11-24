@@ -119,7 +119,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
    <div style="margin-top:18px;font-size:14.5px;color:#374151">Prepared voice: <b id="totlen">0:00</b> <span id="totmsg" class="bad">— add at least 0:30</span></div>
    <div class="meter"><span class="band" style="left:20%;width:40%"></span><i id="totbar" style="width:0"></i></div>
    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9ca3af"><span>0:00</span><span>recommended 1:00–3:00</span><span>5:00</span></div>
-   <label class="consent"><input type="checkbox" id="consent"><span>This is my own voice, and I agree to an AI voice clone of me being created with ElevenLabs to narrate my poster. The clone is deleted from ElevenLabs as soon as the narration is made.</span></label>
+   <label class="consent"><input type="checkbox" id="consent"><span>This is my own voice, and I agree to an AI voice clone of me being created with ElevenLabs to narrate my poster. <span id="consentdel">The clone is deleted from ElevenLabs as soon as the narration is made.</span></span></label>
   </div>
 
   <div class="step" id="s4">
@@ -183,6 +183,7 @@ async function refreshMe(){
 }
 async function checkServer(){
   try{const s=await call("/api/status");const miss=[];if(!s.openai)miss.push("OPENAI_API_KEY");if(!s.elevenlabs)miss.push("ELEVENLABS_API_KEY");if(!s.token)miss.push("TOKEN_SECRET");if(!s.storage)miss.push("POSTERS storage");
+    if(s.keepVoices)$("consentdel").textContent="While the studio is being tested, the clone is kept in the studio's ElevenLabs account and can be deleted at any time on request.";
     if(miss.length){const n=$("envnote");n.className="notice err";n.textContent="The studio isn't fully set up yet (missing on the server: "+miss.join(", ")+"). Building won't work until this is fixed.";}}
   catch(e){}
 }
