@@ -194,9 +194,10 @@ function pick(drop,input,fn){
   drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
   drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");if(e.dataTransfer.files.length)fn([...e.dataTransfer.files]);});
 }
-pick($("pdfdrop"),$("pdfin"),files=>{
+pick($("pdfdrop"),$("pdfin"),async files=>{
   const f=files[0],st=$("pdfstate");paperFile=null;
-  if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name))st.innerHTML='<span class="bad">That is not a PDF.</span>';
+  let isPdf=false;try{isPdf=(await f.slice(0,1024).text()).includes("%PDF-");}catch(e){}
+  if(!isPdf)st.innerHTML='<span class="bad">This file is not a PDF of the paper.</span> If you saved it from a library or journal page, open it to check it is the paper itself.';
   else if(f.size>MAX_PDF)st.innerHTML='<span class="bad">That PDF is larger than 30 MB.</span>';
   else{paperFile=f;st.innerHTML='<span class="ok">✓</span> '+esc(f.name)+' · '+(f.size/1048576).toFixed(1)+' MB';}
   check();

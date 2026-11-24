@@ -349,10 +349,14 @@ async function api(request, env, url) {
 
   if (p === "/api/draft" && method === "POST") {
     const spoken = String(url.searchParams.get("spoken") || "").trim().slice(0, 60);
-    const fname = (String(url.searchParams.get("filename") || "paper.pdf").replace(/[^\w.\- ]+/g, "_").slice(0, 80)) || "paper.pdf";
+    /* OpenAI decides the file type from the extension, so always send a plain name ending in lowercase .pdf */
+    const base = String(url.searchParams.get("filename") || "paper").replace(/\.pdf$/i, "").replace(/[^A-Za-z0-9_\- ]+/g, "_").replace(/^[_\s]+|[_\s]+$/g, "").slice(0, 60);
+    const fname = (base || "paper") + ".pdf";
     const bytes = await request.arrayBuffer();
     if (!bytes.byteLength) return err(400, "No PDF received.", "bad_request");
     if (bytes.byteLength > MAX_PDF) return err(413, "That PDF is larger than 30 MB.", "too_large");
+    const head = new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(1024, bytes.byteLength)));
+    if (!head.includes("%PDF-")) return err(400, "That file is not a PDF. If you saved it from a library or journal page, open the downloaded file to check it is the paper itself, then try again.", "not_pdf");
     if (!spoken) return err(400, "Name is missing.", "bad_request");
     const note = h => { let t = ""; try { t = decodeURIComponent(request.headers.get(h) || ""); } catch {} return t.replace(/\r/g, "").trim().slice(0, MAX_NOTE); };
     const notes = { introduction: note("x-introduction"), motivation: note("x-motivation") };
