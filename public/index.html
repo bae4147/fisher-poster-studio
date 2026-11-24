@@ -348,7 +348,7 @@ $("build").onclick=async()=>{
     step("poster","on");
     await call("/api/me");  // refresh this browser's owner cookie before building
     const notes={"x-introduction":encodeURIComponent($("intro").value.trim().slice(0,1200)),"x-motivation":encodeURIComponent($("motiv").value.trim().slice(0,1200))};
-    const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf",...notes},body:paperFile});
+    const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&display="+encodeURIComponent($("dname").value.trim())+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf",...notes},body:paperFile});
     const poster=d.poster;step("poster","done");
 
     cur="sample";step("sample","on");
@@ -373,7 +373,7 @@ $("build").onclick=async()=>{
     const L=(poster.podcast&&poster.podcast.lines)||[];
     for(const [i,l] of L.entries()){
       step("pod","on","("+(i+1)+"/"+L.length+")");
-      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,index:i,speaker:l.speaker,text:l.text,
+      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,index:i,speaker:l.speaker,host:(poster.podcast&&poster.podcast.hostKey)||"stock",text:l.text,
         previous_text:L.slice(Math.max(0,i-2),i).map(x=>x.text).join(" "),next_text:(L[i+1]&&L[i+1].text)||""});
       try{await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}
       catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}

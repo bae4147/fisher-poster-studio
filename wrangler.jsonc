@@ -23,6 +23,10 @@
     "DAILY_BUILD_LIMIT": "20",
     "HOST_VOICE_ID": "",
     // Testing: "true" keeps voice clones in ElevenLabs; set back to "false" to delete them after each build.
-    "KEEP_VOICE_CLONES": "true"
+    "KEEP_VOICE_CLONES": "true",
+    // Podcast hosts: ElevenLabs voice IDs of the professors' existing, consented clones (Voices → My Voices → the voice → ID).
+    // AC hosts by default; Hun Whee Lee hosts when AC is the author. Leave empty to use the stock AI host.
+    "HOST_AC_VOICE_ID": "",
+    "HOST_HUN_VOICE_ID": ""
   }
 }

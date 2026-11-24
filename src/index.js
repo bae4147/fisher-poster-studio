@@ -31,7 +31,19 @@ const MAX_PDF = 30 * 1024 * 1024;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
 const MAX_POD_LINES = 32, MAX_POD_LINE = 700;
-const HOST_NAME = "Jordan";
+/* Podcast hosts. Faculty hosts use voice clones already in the ElevenLabs account (IDs set in wrangler.jsonc),
+   made with the professors' consent. AC hosts by default; when AC is the author, Hun Whee Lee hosts.
+   If the needed voice ID is not set, the stock AI host is used. */
+const HOSTS = {
+  ac: { name: "Aravind Chandrasekaran", voiceVar: "HOST_AC_VOICE_ID", faculty: true },
+  hun: { name: "Hun Whee Lee", voiceVar: "HOST_HUN_VOICE_ID", faculty: true },
+  stock: { name: "Jordan", voiceVar: null, faculty: false }
+};
+const isAC = (...names) => names.some(n => /chandrasekaran/i.test(String(n || "")));
+function chooseHost(env, ...authorNames) {
+  const k = isAC(...authorNames) ? "hun" : "ac";
+  return env[HOSTS[k].voiceVar] ? k : "stock";
+}
 /* Testing switch (wrangler.jsonc var KEEP_VOICE_CLONES = "true"): keep voice clones in ElevenLabs instead of deleting them. */
 const keepClones = env => String(env.KEEP_VOICE_CLONES || "").toLowerCase() === "true";
 const COOKIE = "fpo";
@@ -149,7 +161,7 @@ const POSTER_SCHEMA = {
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
   }
 };
-const posterSystem = spoken => `You turn a published research paper into the content of an interactive, conference-style poster for a general audience (students and members of the public). The presenter is the paper's author, who introduces themself as "${spoken}".
+const posterSystem = (spoken, hostKey = "stock") => { const H = HOSTS[hostKey] || HOSTS.stock; return `You turn a published research paper into the content of an interactive, conference-style poster for a general audience (students and members of the public). The presenter is the paper's author, who introduces themself as "${spoken}".
 
 Accuracy rules:
 - Use ONLY facts stated in the attached paper. Read tables and figures as well as the text.
@@ -172,7 +184,8 @@ Narration scripts (read aloud by an AI voice of the author; introduction and mot
 - No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.
 
 Podcast (about 3 minutes, 420-480 words in total):
-- Two speakers: the host, ${HOST_NAME}, a curious, warm interviewer for Fisher College of Business research conversations; and the guest, ${spoken}, the author.
+- Two speakers: the host, ${H.faculty ? H.name + ", a Fisher College of Business faculty colleague who hosts these research conversations and is curious, warm and new to this paper" : H.name + ", a curious, warm interviewer for Fisher College of Business research conversations"}; and the guest, ${spoken}, the author.${H.faculty ? `
+- The host is a real person speaking through an AI voice. Keep the host to reactions, questions, restatements and everyday illustrations. The host does not describe their own research, experiences, opinions or anything else about themselves, and does not praise or evaluate the guest's work beyond brief natural reactions. The host may introduce themself by name in the welcome.` : ""}
 - The first turn is the host: one short welcome sentence that names the guest, then exactly this question: "What made you or the research team think about this question?"
 - The guest answers using only the motivation the paper states and anything the author wrote in their own notes. Do not invent personal stories, conversations or experiences.
 - Make it sound like two people actually talking, not an interview form. Avoid a rigid pattern of host question, guest answer, host question:
@@ -188,7 +201,7 @@ Podcast (about 3 minutes, 420-480 words in total):
 Author's own notes:
 - The author may supply their own text for the introduction or motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
 - Facts about the study in their notes must still agree with the paper; if they conflict, follow the paper.
-- When a panel has no author text, draft it from the paper.`;
+- When a panel has no author text, draft it from the paper.`; };
 
 async function uploadPdf(env, bytes, filename) {
   const fd = new FormData();
@@ -204,12 +217,12 @@ function notesText(notes) {
   if (notes.motivation) parts.push("The author's own text for the MOTIVATION panel:\n<<<\n" + notes.motivation + "\n>>>");
   return parts.length ? "\n\n" + parts.join("\n\n") : "";
 }
-async function draftPoster(env, fileId, spoken, notes = {}) {
+async function draftPoster(env, fileId, spoken, notes = {}, hostKey = "stock") {
   const body = {
     model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
     reasoning: { effort: env.OPENAI_REASONING || "medium" },
     input: [
-      { role: "system", content: posterSystem(spoken) },
+      { role: "system", content: posterSystem(spoken, hostKey) },
       { role: "user", content: [
         { type: "input_file", file_id: fileId, detail: env.PDF_DETAIL || "low" },
         { type: "input_text", text: "Create the poster content for this paper." + notesText(notes) } ] } ],
@@ -220,9 +233,10 @@ async function draftPoster(env, fileId, spoken, notes = {}) {
   const data = await res.json();
   const text = outputText(data);
   if (!text) throw new UpstreamError("OpenAI returned no poster" + (data.status ? " (status " + data.status + ")" : ""), "upstream");
-  return cleanPoster(JSON.parse(text));
+  return cleanPoster(JSON.parse(text), hostKey);
 }
-function cleanPoster(j) {
+function cleanPoster(j, hostKey) {
+  hostKey = HOSTS[hostKey] ? hostKey : (HOSTS[j?.podcast?.hostKey] ? j.podcast.hostKey : "stock");
   const St = (v, n) => String(v == null ? "" : v).trim().slice(0, n || 600);
   const A = (v, n) => Array.isArray(v) ? v.slice(0, n) : [];
   const Ic = v => ICONS.includes(v) ? v : "";
@@ -243,7 +257,7 @@ function cleanPoster(j) {
     methods: { icon: Ic(j.methods?.icon), studies: A(j.methods?.studies, 4).map(s => ({ icon: Ic(s?.icon), name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
     takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
-    podcast: { host: HOST_NAME, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
+    podcast: { host: HOSTS[hostKey].name, hostKey, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
   if (!p.title || !p.introduction.headline || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
@@ -394,7 +408,8 @@ async function api(request, env, url) {
     await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
     return slowJson(async () => {
       const fileId = await uploadPdf(env, bytes, fname);
-      try { return { poster: await draftPoster(env, fileId, spoken, notes) }; }
+      const display = String(url.searchParams.get("display") || "").slice(0, 80);
+      try { return { poster: await draftPoster(env, fileId, spoken, notes, chooseHost(env, spoken, display)) }; }
       finally { fetch(`${openaiBase(env)}/v1/files/${fileId}`, { method: "DELETE", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } }).catch(() => {}); }
     });
   }
@@ -441,7 +456,9 @@ async function api(request, env, url) {
     return slowJson(async () => {
       let audio;
       if (b.speaker === "host") {
-        try { audio = await tts(env, await hostVoice(env), text, ctx); }
+        const hk = HOSTS[b.host] ? b.host : "stock", fixed = HOSTS[hk].voiceVar && env[HOSTS[hk].voiceVar];
+        if (fixed) audio = await tts(env, fixed, text, ctx);   // faculty host: their own consented clone, never replaced
+        else try { audio = await tts(env, await hostVoice(env), text, ctx); }
         catch (e) {
           if (!/error 404|voice_not_found|not found/i.test(String(e.message))) throw e;
           await env.POSTERS.delete("host_voice");

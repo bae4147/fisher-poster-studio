@@ -196,7 +196,7 @@ button{font:inherit}
       <span class="nm" id="nguest">Author</span></div>
      <div class="who" id="whost"><div class="bub">···</div>
       <svg viewBox="0 0 16 16" shape-rendering="crispEdges"><rect x="4" y="2" width="8" height="3" fill="#8a4b2b"/><rect x="3" y="1" width="10" height="1" fill="#333"/><rect x="2" y="2" width="1" height="2" fill="#333"/><rect x="13" y="2" width="1" height="2" fill="#333"/><rect x="2" y="4" width="2" height="4" fill="#f4c542"/><rect x="12" y="4" width="2" height="4" fill="#f4c542"/><rect x="4" y="5" width="8" height="6" fill="#e8b98f"/><rect x="5" y="7" width="1" height="1" fill="#14242a"/><rect x="10" y="7" width="1" height="1" fill="#14242a"/><rect class="mouth" x="7" y="9" width="2" height="1" fill="#6b2e2e"/><rect x="2" y="12" width="12" height="4" fill="#7c3aed"/><rect x="11" y="9" width="1" height="4" fill="#333"/><rect x="10" y="8" width="3" height="2" fill="#555"/></svg>
-      <span class="nm">Jordan · AI host</span></div>
+      <span class="nm" id="nhost">Jordan · AI host</span></div>
     </div>
     <button id="ppod" type="button">▶ Play the podcast · ~3 min</button>
     <div class="pctl"><span id="pstat"></span><button id="pstop" style="display:none">■ stop</button></div>
@@ -291,7 +291,9 @@ function renderPoster(v){
   const hasPod=!!(v.podcast&&p.podcast&&p.podcast.lines&&p.podcast.lines.length);
   $("pnow").classList.toggle("hidden",!hasPod);
   $("pnowx").textContent=hasPod?"Play the podcast, or click a panel to hear that section.":"Click a panel on the poster to hear that section.";
-  $("pnowv").textContent="AI voices: "+v.displayName+" (made with their consent) and an AI host. The conversation was generated from the paper.";
+  const pc=p.podcast||{},fac=pc.hostKey&&pc.hostKey!=="stock";
+  $("nhost").textContent=fac?pc.host+" · host":(pc.host||"Jordan")+" · AI host";
+  $("pnowv").textContent=fac?"AI voices of "+v.displayName+" and host "+pc.host+", both made with their consent. The conversation was generated from the paper; neither of them wrote or recorded it.":"AI voices: "+v.displayName+" (made with their consent) and an AI host. The conversation was generated from the paper.";
   $("pchatt").textContent="Chat with "+v.displayName;$("pchats").textContent="An AI version of "+v.displayName+", made with their consent. Replies are generated from the paper, not written by them.";
   $("pin").placeholder="Ask "+v.displayName+" about the study…";
   $("plog").innerHTML="";$("psugg").innerHTML="";$("psugg").style.display="";$("pin").disabled=false;$("psend").disabled=false;
