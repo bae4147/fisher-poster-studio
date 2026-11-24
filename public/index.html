@@ -178,11 +178,7 @@ async function call(path,opts={}){
 async function refreshMe(){
   let me=null;try{me=await call("/api/me");}catch(e){}
   const m=$("mine");
-  const list=me&&Array.isArray(me.mine)?me.mine:(me&&me.mine?[me.mine]:[]);
-  if(list.length){m.innerHTML="";m.append(el2("b","Posters made in this browser"));const ul=document.createElement("ul");ul.style.margin="6px 0 0";ul.style.paddingLeft="20px";
-    list.forEach(x=>{const li=document.createElement("li");const a=document.createElement("a");a.href="/p/"+x.slug;a.target="_blank";a.rel="noopener";a.textContent=x.title;li.append(a);if(x.displayName)li.append(" · "+x.displayName);ul.append(li);});
-    m.append(ul);m.classList.remove("hidden");}
-  else m.classList.add("hidden");
+  m.classList.add("hidden");  // the per-browser list is not shown in the studio
   check();
 }
 async function checkServer(){
