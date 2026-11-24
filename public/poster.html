@@ -52,6 +52,12 @@ button{font:inherit}
 .zone .lead div{min-width:0}
 .zone .lead p:last-child{margin-bottom:0}
 .zone.author{background:#fff6d6}
+img.face{display:block;object-fit:contain;image-rendering:pixelated}
+#stage img.face{width:calc(var(--u)*24);height:calc(var(--u)*24)}
+#stage .who.talk img.face{animation:bob .5s ease-in-out infinite}
+.acard .av img.face{width:calc(var(--u)*26);height:calc(var(--u)*26)}
+.ntalk img.face{width:calc(var(--u)*13);height:calc(var(--u)*13);animation:bob .5s ease-in-out infinite}
+.ntalk.done img.face{animation:none}
 .acard{display:flex;gap:calc(var(--u)*4);align-items:center}
 .acard .av{flex:0 0 auto;background:#9fd8ff;border:calc(var(--u)*.8) solid var(--ink);padding:calc(var(--u)*1.5);box-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 var(--ink)}
 .acard .av svg{display:block;width:calc(var(--u)*26);height:calc(var(--u)*26);image-rendering:pixelated}
@@ -228,6 +234,11 @@ button{font:inherit}
 "use strict";
 const ALL_SECTIONS=["introduction","motivation","narrative","findings","methods","takeaway"];
 let SECTIONS=["narrative","findings","methods","takeaway"];
+/* characters: a generated pixel portrait when one exists, otherwise the default pixel figure */
+const DEFAULT_GUEST=document.querySelector("#wguest svg").outerHTML,DEFAULT_HOST=document.querySelector("#whost svg").outerHTML;
+let GUEST_IMG=null;
+const faceHTML=()=>GUEST_IMG?'<img class="face" alt="" src="'+GUEST_IMG+'">':DEFAULT_GUEST;
+function setFace(who,html){const w=$(who),old=w.querySelector("svg,img.face");const t=document.createElement("div");t.innerHTML=html;old.replaceWith(t.firstChild);}
 const SEC_TITLES={introduction:"Introduction",motivation:"Motivation",narrative:"Research narrative",findings:"Key findings",methods:"Research methods",takeaway:"Practical takeaway"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s);
@@ -250,6 +261,7 @@ async function openViewer(slug){
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function zoneEl(key,num,title,wide){const z=el("div","zone"+(wide?" wide":""));z.dataset.z=key;const h=el("h4");h.append(el("span","n",num),document.createTextNode(title));h.append(el("span","pl",PL_IDLE()));const sb=el("span","sb","■");sb.title="Stop";h.append(sb);z.append(h);return z;}
 function renderPoster(v){
+  GUEST_IMG=v.avatar?"/avatar/"+(v.slug||V.slug)+".webp":null;
   const p=v.poster,m=$("pmain");m.innerHTML="";
   const head=el("div");head.id="phead";head.append(el("div","tag","INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN"),el("h2",null,p.title));
   const au=el("div","au");p.authors.forEach((a,i)=>{if(i)au.append(", ");au.append(a===v.displayName||v.displayName.includes(a)||a.includes(v.spokenName||"\u0000")?el("b",null,a):document.createTextNode(a));});if(p.venue){au.append(" · ");au.append(el("i",null,p.venue));}head.append(au);m.append(head);
@@ -263,7 +275,7 @@ function renderPoster(v){
   if(I&&SECTIONS.includes("introduction")){
     if(authorCard){
       const z=zone("introduction",true);z.classList.add("author");const card=el("div","acard");
-      const av=el("div","av");av.innerHTML=$("wguest").querySelector("svg").outerHTML;card.append(av);
+      const av=el("div","av");av.innerHTML=faceHTML();card.append(av);
       const info=el("div","ai");info.append(el("div","an",v.displayName));if(I.role)info.append(el("div","ar",I.role));if(I.bio)info.append(el("p","ab",I.bio));
       if(I.tags&&I.tags.length){const tg=el("div","atags");I.tags.forEach(t=>tg.append(el("span",null,t)));info.append(tg);}
       card.append(info);z.append(card);m.append(z);
@@ -310,6 +322,9 @@ function renderPoster(v){
     const sb=z.querySelector(".sb");if(sb)sb.addEventListener("click",e=>{e.stopPropagation();stopNarration();});
   });
   $("nguest").textContent=v.displayName;
+  setFace("wguest",faceHTML());
+  setFace("whost",DEFAULT_HOST);
+  {const hk=p.podcast&&p.podcast.hostKey;if(hk==="ac"||hk==="hun"){const im=new Image();im.onload=()=>setFace("whost",'<img class="face" alt="" src="'+im.src+'">');im.src="/avatar/host-"+hk+".webp";}}
   const hasPod=!!(v.podcast&&p.podcast&&p.podcast.lines&&p.podcast.lines.length);
   $("pnow").classList.toggle("hidden",!hasPod);
   $("pnowx").textContent=hasPod?"Play the podcast, or click a panel to hear that section.":"Click a panel on the poster to hear that section.";
@@ -420,7 +435,7 @@ function syncZoom(){
   const tk=$("pzoom").querySelector(".ntalk");if(tk)tk.classList.toggle("done",plState(c.dataset.z)==="paused");
   /* the talking author sits just above the zoomed panel, outside it */
   let t=$("pzoom").querySelector(".ntalk");
-  if(on&&!t){t=el("div","ntalk");t.style.setProperty("--u",zoomScale());t.innerHTML=$("wguest").querySelector("svg").outerHTML;const bar=el("div","nbar");bar.append(el("i"));t.append(bar);t.addEventListener("click",e=>e.stopPropagation());$("pzoom").insertBefore(t,c);}
+  if(on&&!t){t=el("div","ntalk");t.style.setProperty("--u",zoomScale());t.innerHTML=faceHTML();const bar=el("div","nbar");bar.append(el("i"));t.append(bar);t.addEventListener("click",e=>e.stopPropagation());$("pzoom").insertBefore(t,c);}
   if(!on&&t)t.remove();
 }
 function closeZoom(){$("pzoom").classList.remove("on");$("pzoom").querySelectorAll(".zone,.ntalk").forEach(n=>n.remove());}

@@ -8,7 +8,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "run_worker_first": ["/api/*", "/mcp/*", "/audio/*", "/p/*", "/health", "/lee"]
+    "run_worker_first": ["/api/*", "/mcp/*", "/audio/*", "/avatar/*", "/p/*", "/health", "/lee"]
   },
   // Storage for posters and narration audio. Wrangler creates it on the first deploy.
   "kv_namespaces": [
@@ -24,6 +24,9 @@
     "HOST_VOICE_ID": "",
     // Testing: "true" keeps voice clones in ElevenLabs; set back to "false" to delete them after each build.
     "KEEP_VOICE_CLONES": "true",
+    // Pixel-art character from an optional photo (OpenAI /v1/images/edits). quality: low | medium | high
+    "IMAGE_MODEL": "gpt-image-1.5",
+    "IMAGE_QUALITY": "medium",
     // Podcast hosts: ElevenLabs voice IDs of the professors' existing, consented clones (Voices → My Voices → the voice → ID).
     // AC hosts by default; Hun Whee Lee hosts when AC is the author. Leave empty to use the stock AI host.
     "HOST_AC_VOICE_ID": "FsQdQPew15UMIJARAw9l",

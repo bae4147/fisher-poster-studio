@@ -17,7 +17,7 @@
  *   POST /api/chat            {slug, messages}  -> AI version of the author answers from the paper (public)
  *   POST /mcp/<invite-code>                     -> the earlier MCP connector, kept for compatibility
  *
- * Secrets: OPENAI_API_KEY, ELEVENLABS_API_KEY, TOKEN_SECRET (INVITE_CODES is only used by /mcp/)
+ * Secrets: OPENAI_API_KEY, ELEVENLABS_API_KEY, TOKEN_SECRET, ADMIN_CODE (for /admin.html host characters) (INVITE_CODES is only used by /mcp/)
  * Vars (wrangler.jsonc): OPENAI_POSTER_MODEL, OPENAI_CHAT_MODEL, OPENAI_REASONING, PDF_DETAIL, MODEL_ID, DAILY_BUILD_LIMIT
  * KV binding: POSTERS
  */
@@ -317,6 +317,38 @@ async function hostVoice(env, refresh = false) {
   return pick.voice_id;
 }
 
+/* ---------------- pixel-art avatar from a photo (OpenAI image edits) ---------------- */
+const MAX_PHOTO = 8 * 1024 * 1024;
+const AVATAR_PROMPT = `Redraw the person in this photo as a 16-bit pixel-art bust portrait (head and shoulders) for a retro, game-like research poster.
+Front-facing, friendly neutral expression, centered, square composition with the shoulders reaching the bottom edge.
+Chunky, clearly visible pixels (roughly 48 by 48 pixel grid scaled up), flat colors, a dark 1-pixel outline, limited palette, no gradients, no dithering noise.
+Keep the person's recognizable features: hair style and color, face shape, skin tone, glasses, facial hair and the kind of clothing they wear.
+Plain transparent background. No text, no logos, no frame, no props.`;
+async function makeAvatar(env, bytes, type) {
+  const fd = new FormData();
+  fd.append("model", env.IMAGE_MODEL || "gpt-image-1.5");
+  fd.append("image[]", new Blob([bytes], { type }), "photo." + (type.split("/")[1] || "png"));
+  fd.append("prompt", AVATAR_PROMPT);
+  fd.append("size", "1024x1024");
+  fd.append("quality", env.IMAGE_QUALITY || "medium");
+  fd.append("background", "transparent");
+  fd.append("output_format", "webp");
+  fd.append("output_compression", "85");
+  const res = await fetch(`${openaiBase(env)}/v1/images/edits`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` }, body: fd });
+  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI (image)"), "upstream");
+  const b64 = (await res.json())?.data?.[0]?.b64_json;
+  if (!b64) throw new UpstreamError("The image model returned no picture.", "upstream");
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+async function readPhoto(request) {
+  const type = (request.headers.get("content-type") || "").split(";")[0].trim();
+  if (!/^image\/(jpeg|png|webp)$/.test(type)) return { error: err(400, "Please use a JPG, PNG or WebP photo.", "bad_photo") };
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength) return { error: err(400, "The photo is empty.", "bad_photo") };
+  if (bytes.byteLength > MAX_PHOTO) return { error: err(413, "The photo is larger than 8 MB.", "too_large") };
+  return { bytes, type };
+}
+
 /* ---------------- chat ---------------- */
 function chatSystem(v) {
   return `You are an AI version of ${v.displayName}, created with their consent, standing at the poster for their paper (summarized below) on an interactive web poster about Fisher College of Business faculty research. Visitors are students and members of the public. Speak in the first person as the author ("we found", "in our second study").
@@ -373,7 +405,7 @@ async function api(request, env, url) {
     const v = await env.POSTERS.get("poster:" + m[1], "json");
     if (!v) return err(404, "Poster not found.", "not_found");
     const { brief, ...pub } = v.poster;
-    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, podcast: v.podcast || 0, poster: pub });
+    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, podcast: v.podcast || 0, avatar: !!v.avatar, poster: pub });
   }
 
   if (p === "/api/chat" && method === "POST") {
@@ -474,6 +506,33 @@ async function api(request, env, url) {
     });
   }
 
+  /* the author's character, made during the build; the photo itself is never stored */
+  if (p === "/api/avatar" && method === "POST") {
+    const voice_id = url.searchParams.get("voice_id") || "", slug = url.searchParams.get("slug") || "";
+    if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id) || url.searchParams.get("voice_token") !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    if (!/^[a-z0-9]{6,20}$/.test(slug)) return err(400, "Bad request.", "bad_request");
+    const ph = await readPhoto(request); if (ph.error) return ph.error;
+    return slowJson(async () => {
+      const img = await makeAvatar(env, ph.bytes, ph.type);
+      await env.POSTERS.put(`avatar:${slug}`, img, { metadata: { type: "image/webp" } });
+      return { ok: true, bytes: img.byteLength };
+    });
+  }
+
+  /* host characters (AC, Hun Whee Lee), set once from /admin.html with the ADMIN_CODE secret */
+  if (p === "/api/host-avatar" && method === "POST") {
+    if (!env.ADMIN_CODE) return err(403, "Add an ADMIN_CODE secret in Cloudflare first.", "no_admin");
+    if ((request.headers.get("x-admin-code") || "") !== env.ADMIN_CODE) return err(403, "Wrong admin code.", "bad_admin");
+    const host = url.searchParams.get("host") || "";
+    if (!["ac", "hun"].includes(host)) return err(400, "Unknown host.", "bad_request");
+    const ph = await readPhoto(request); if (ph.error) return ph.error;
+    return slowJson(async () => {
+      const img = await makeAvatar(env, ph.bytes, ph.type);
+      await env.POSTERS.put(`host_avatar:${host}`, img, { metadata: { type: "image/webp" } });
+      return { ok: true, url: `/avatar/host-${host}.webp` };
+    });
+  }
+
   if (p === "/api/publish" && method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     const slug = String(b.slug || "");
@@ -486,7 +545,8 @@ async function api(request, env, url) {
     const podN = poster.podcast.lines.length;
     for (let i = 0; i < podN; i++) if (!(await env.POSTERS.get(`audio:${slug}:pod-${i}`, "arrayBuffer"))) return err(400, "Podcast audio is missing. Build again.", "missing_audio");
     const createdAt = Date.now();
-    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
+    const avatar = !!(await env.POSTERS.get(`avatar:${slug}`, "arrayBuffer"));
+    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN, avatar }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
     /* Every build gets its own permanent link; earlier posters are kept. */
     const ck = ownerKey(ownerId), list = ownedSlugs(await env.POSTERS.get(ck));
     await env.POSTERS.put(ck, JSON.stringify([slug, ...list.filter(x => x !== slug)].slice(0, 200)));
@@ -504,6 +564,12 @@ export default {
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
       if (p.startsWith("/api/")) return await api(request, env, url);
+      const av = p.match(/^\/avatar\/(host-(ac|hun)|[a-z0-9]{6,20})\.webp$/);
+      if (av) {
+        const img = await env.POSTERS.get(av[2] ? `host_avatar:${av[2]}` : `avatar:${av[1]}`, "arrayBuffer");
+        if (!img) return new Response("Not found", { status: 404 });
+        return new Response(img, { headers: { "content-type": "image/webp", "cache-control": av[2] ? "public, max-age=300" : "public, max-age=86400" } });
+      }
       let m = p.match(new RegExp("^/audio/([a-z0-9]{6,20})/(" + SECTIONS.join("|") + "|pod-\\d{1,2})\\.mp3$"));
       if (m) {
         const buf = await env.POSTERS.get(`audio:${m[1]}:${m[2]}`, "arrayBuffer");

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Fisher Poster Studio · Host characters</title>
+<style>
+  body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#f6f7f9;color:#111827}
+  main{max-width:640px;margin:40px auto;padding:0 20px}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:#4b5563;margin:0 0 24px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:16px}
+  label{display:block;font-weight:600;margin:14px 0 6px}
+  label:first-child{margin-top:0}
+  input[type=password],select{box-sizing:border-box;width:100%;font:inherit;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px}
+  .row{display:flex;gap:16px;align-items:center;margin-top:8px}
+  .row img{width:120px;height:120px;border-radius:8px;border:1px solid #e5e7eb;background:#e8f4ff;object-fit:contain;image-rendering:pixelated}
+  .consent{display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:16px}
+  button{font:inherit;font-weight:600;background:#2563eb;color:#fff;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;margin-top:16px}
+  button:disabled{background:#9ca3af;cursor:default}
+  .msg{margin-top:12px}.bad{color:#b91c1c}.ok{color:#047857}
+  .cur{display:flex;gap:16px}
+  .cur figure{margin:0;text-align:center;font-size:13px;color:#4b5563}
+  .cur img{width:96px;height:96px;border-radius:8px;border:1px solid #e5e7eb;background:#e8f4ff;object-fit:contain;image-rendering:pixelated;display:block;margin-bottom:4px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Podcast host characters</h1>
+  <p class="sub">Make the pixel-art character used for a podcast host from a photo. Hosts without one use the default character. The photo is sent to OpenAI once and is not stored; only the character is saved.</p>
+
+  <div class="card">
+    <label>Current characters</label>
+    <div class="cur">
+      <figure><img id="cur-ac" alt=""><span>Aravind Chandrasekaran</span></figure>
+      <figure><img id="cur-hun" alt=""><span>Hun Whee Lee</span></figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <label for="code">Admin code</label>
+    <input type="password" id="code" autocomplete="off">
+    <label for="host">Host</label>
+    <select id="host"><option value="ac">Aravind Chandrasekaran</option><option value="hun">Hun Whee Lee</option></select>
+    <label for="photo">Photo (JPG, PNG or WebP)</label>
+    <input type="file" id="photo" accept="image/jpeg,image/png,image/webp">
+    <div class="row"><img id="prev" alt="" style="display:none"><img id="out" alt="" style="display:none"></div>
+    <label class="consent"><input type="checkbox" id="ok"><span>This host agreed to an AI pixel-art character made from this photo being shown on Fisher posters.</span></label>
+    <button id="go" disabled>Make character</button>
+    <div class="msg" id="msg"></div>
+  </div>
+</main>
+<script>
+const $=id=>document.getElementById(id);let blob=null;
+function showCurrent(){for(const h of ["ac","hun"]){const i=$("cur-"+h);i.src="/avatar/host-"+h+".webp?t="+Date.now();i.onerror=()=>{i.removeAttribute("src");i.alt="default";};}}
+showCurrent();
+fetch("/api/me",{credentials:"same-origin"}).catch(()=>{});   // sets the browser session the API needs
+function check(){$("go").disabled=!(blob&&$("ok").checked&&$("code").value.trim());}
+["ok","code"].forEach(id=>$(id).addEventListener("input",check));
+$("photo").addEventListener("change",async()=>{
+  const f=$("photo").files[0];blob=null;$("prev").style.display="none";check();if(!f)return;
+  const bmp=await createImageBitmap(f),sc=Math.min(1,1024/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas");c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.9));$("prev").src=URL.createObjectURL(blob);$("prev").style.display="block";check();
+});
+$("go").addEventListener("click",async()=>{
+  $("go").disabled=true;$("msg").className="msg";$("msg").textContent="Drawing… this takes about 30–60 seconds.";
+  try{
+    const res=await fetch("/api/host-avatar?host="+$("host").value,{method:"POST",credentials:"same-origin",headers:{"content-type":"image/jpeg","x-admin-code":$("code").value.trim()},body:blob});
+    const t=(await res.text()).trim();let d={};try{d=JSON.parse(t);}catch(e){}
+    if(d.error)throw d.error;if(!d.ok)throw {message:"Unexpected reply ("+res.status+")."};
+    $("out").src=d.url+"?t="+Date.now();$("out").style.display="block";$("msg").className="msg ok";$("msg").textContent="Saved. New podcasts and existing posters with this host now show this character.";showCurrent();
+  }catch(e){$("msg").className="msg bad";$("msg").textContent=e.message||"Something went wrong.";}
+  check();
+});
+</script>
+</body>
+</html>
