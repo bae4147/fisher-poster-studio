@@ -27,6 +27,13 @@
     // Podcast hosts: ElevenLabs voice IDs of the professors' existing, consented clones (Voices → My Voices → the voice → ID).
     // AC hosts by default; Hun Whee Lee hosts when AC is the author. Leave empty to use the stock AI host.
     "HOST_AC_VOICE_ID": "FsQdQPew15UMIJARAw9l",
-    "HOST_HUN_VOICE_ID": "slZT8qWxuuSRDgAzN5N0"
+    "HOST_HUN_VOICE_ID": "slZT8qWxuuSRDgAzN5N0",
+    // Optional per-host ElevenLabs model (e.g. "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_v3"); empty = MODEL_ID.
+    // Use this if a host's accent drifts. Models above are also told the language is English.
+    "HOST_AC_MODEL_ID": "",
+    "HOST_HUN_MODEL_ID": "",
+    // Voice settings for every clone: higher similarity keeps each speaker's own accent.
+    "VOICE_STABILITY": "0.6",
+    "VOICE_SIMILARITY": "0.9"
   }
 }

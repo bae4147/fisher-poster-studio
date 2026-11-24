@@ -286,10 +286,15 @@ async function deleteVoice(env, voiceId) {
     return res.ok || res.status === 404;
   } catch { return false; }
 }
+/* Cloned voices keep the speaker's own accent better with high similarity and speaker boost.
+   ctx.model overrides the model (per-host setting); models that accept a language code are told it is English. */
+const LANG_CODE_MODELS = /^(eleven_turbo_v2_5|eleven_flash_v2_5|eleven_v3)/;
 async function tts(env, voiceId, text, ctx = {}) {
+  const model = ctx.model || env.MODEL_ID || "eleven_multilingual_v2";
   const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
     method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: env.MODEL_ID || "eleven_multilingual_v2", voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+    body: JSON.stringify({ text, model_id: model, voice_settings: { stability: Number(env.VOICE_STABILITY || 0.6), similarity_boost: Number(env.VOICE_SIMILARITY || 0.9), use_speaker_boost: true },
+      ...(LANG_CODE_MODELS.test(model) ? { language_code: "en" } : {}),
       ...(ctx.previous_text ? { previous_text: ctx.previous_text.slice(-600) } : {}), ...(ctx.next_text ? { next_text: ctx.next_text.slice(0, 600) } : {}) })
   });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
@@ -504,7 +509,7 @@ async function api(request, env, url) {
       let audio;
       if (b.speaker === "host") {
         const hk = HOSTS[b.host] ? b.host : "stock", fixed = HOSTS[hk].voiceVar && env[HOSTS[hk].voiceVar];
-        if (fixed) audio = await tts(env, fixed, text, ctx);   // faculty host: their own consented clone, never replaced
+        if (fixed) audio = await tts(env, fixed, text, { ...ctx, model: env[`HOST_${hk.toUpperCase()}_MODEL_ID`] || "" });   // faculty host: their own consented clone, never replaced
         else try { audio = await tts(env, await hostVoice(env), text, ctx); }
         catch (e) {
           if (!/error 404|voice_not_found|not found/i.test(String(e.message))) throw e;
