@@ -30,7 +30,7 @@ const MAX_NOTE = 1500; // author-written introduction / motivation text
 const MAX_PDF = 30 * 1024 * 1024;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
-const MAX_POD_LINES = 26, MAX_POD_LINE = 700;
+const MAX_POD_LINES = 32, MAX_POD_LINE = 700;
 const HOST_NAME = "Jordan";
 /* Testing switch (wrangler.jsonc var KEEP_VOICE_CLONES = "true"): keep voice clones in ElevenLabs instead of deleting them. */
 const keepClones = env => String(env.KEEP_VOICE_CLONES || "").toLowerCase() === "true";
@@ -141,9 +141,9 @@ const POSTER_SCHEMA = {
       tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
     scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
     podcast: { type: "object", additionalProperties: false, required: ["lines"], description: "A 3-minute two-person podcast conversation about the paper", properties: {
-      lines: { type: "array", description: "16-22 turns alternating host and guest, 420-480 words in total", items: { type: "object", additionalProperties: false, required: ["speaker", "text", "section"], properties: {
+      lines: { type: "array", description: "20-30 conversational turns between host and guest, 420-480 words in total", items: { type: "object", additionalProperties: false, required: ["speaker", "text", "section"], properties: {
         speaker: { type: "string", enum: ["host", "guest"] },
-        text: S("What this speaker says in this turn, 8-60 words"),
+        text: S("What this speaker says in this turn, 2-60 words"),
         section: { type: "string", enum: [...SECTIONS, ""], description: "The poster panel this turn is mainly about, so the poster can zoom to it; empty for greetings and small talk" } } } } } },
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
@@ -171,14 +171,19 @@ Narration scripts (read aloud by an AI voice of the author; introduction and mot
 - Write every number as words a speaker would say (for example "five hundred twenty-four", "point five nine").
 - No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.
 
-Podcast (about 3 minutes, 420-480 words, 16-22 turns):
-- Two speakers: the host, ${HOST_NAME}, a curious, friendly interviewer for Fisher College of Business research conversations; and the guest, ${spoken}, the author.
+Podcast (about 3 minutes, 420-480 words in total):
+- Two speakers: the host, ${HOST_NAME}, a curious, warm interviewer for Fisher College of Business research conversations; and the guest, ${spoken}, the author.
 - The first turn is the host: one short welcome sentence that names the guest, then exactly this question: "What made you or the research team think about this question?"
 - The guest answers using only the motivation the paper states and anything the author wrote in their own notes. Do not invent personal stories, conversations or experiences.
-- Then walk through the idea, how it was studied, what was found, and what people should take away. The host asks short questions and reacts naturally; the guest explains with simple examples. Each turn is 8-60 words.
-- The guest speaks for the team ("we", "our team") and may mention co-authors by name.
-- Tag each turn with the poster panel it is mainly about (introduction, motivation, narrative, findings, methods, takeaway), or leave it empty for greetings and the goodbye.
-- The last turn is the host thanking the guest. Same rules as narration: only facts from the paper, numbers written as spoken words, no symbols or abbreviations.
+- Make it sound like two people actually talking, not an interview form. Avoid a rigid pattern of host question, guest answer, host question:
+  - The host mostly reacts and builds on what the guest just said: restates it in everyday words ("So basically..."), checks their understanding, offers a relatable everyday situation the idea applies to, or pushes back gently ("But wouldn't...?"). Only some host turns are questions.
+  - Include short back-and-forth beats: brief reactions ("Huh.", "Right, right.", "Oh, interesting."), the guest picking up the host's example, and the occasional turn where a speaker finishes the other's thought.
+  - Vary turn length: some turns are 2-6 words, most are 10-35, and only a few guest turns run to about 60.
+  - Let the topic flow by association (the idea, how it was studied, what was found, what to do with it), without announcing sections or saying "first", "second", "great question", or "let's move on".
+  - The guest speaks for the team ("we", "our team"), may mention co-authors by name, and explains with simple examples.
+- The host's everyday examples must be framed as illustrations, not as facts from the study; every fact about the study must come from the paper.
+- Tag each turn with the poster panel it is mainly about (introduction, motivation, narrative, findings, methods, takeaway), or leave it empty for greetings, short reactions and the goodbye.
+- End with a light, natural wrap-up and the host thanking the guest. Same rules as narration: numbers written as spoken words, no symbols, abbreviations, stage directions or sound tags.
 
 Author's own notes:
 - The author may supply their own text for the introduction or motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
