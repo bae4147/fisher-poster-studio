@@ -271,11 +271,14 @@ function cleanPoster(j, hostKey) {
 /* ---------------- voice (ElevenLabs) ---------------- */
 const SAMPLE_EXT = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
   "audio/aac": "aac", "audio/ogg": "ogg", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac" };
-async function cloneVoice(env, bytes, name, type = "audio/mpeg") {
+const ACCENTS = ["american", "british", "australian", "canadian", "irish", "scottish", "indian", "korean", "chinese", "japanese", "german", "french", "spanish", "latin american", "italian", "russian", "middle eastern", "african", "other"];
+async function cloneVoice(env, bytes, name, type = "audio/mpeg", accent = "") {
   if (!SAMPLE_EXT[type]) type = "audio/mpeg";
   const fd = new FormData();
   fd.append("name", name);
   fd.append("description", "Created via Fisher Poster Studio");
+  /* like the ElevenLabs website, label the language and (if given) the accent so the model keeps it */
+  fd.append("labels", JSON.stringify({ language: "en", ...(ACCENTS.includes(accent) && accent !== "other" ? { accent } : {}) }));
   fd.append("files", new Blob([bytes], { type }), "voice-sample." + SAMPLE_EXT[type]);
   const res = await fetch(`${elevenBase(env)}/v1/voices/add`, { method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, accept: "application/json" }, body: fd });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
@@ -477,7 +480,8 @@ async function api(request, env, url) {
     if (bytes.byteLength > MAX_VOICE) return err(413, "The voice sample is larger than 10 MB. Trim it and try again.", "too_large");
     return slowJson(async () => {
       const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-      const voice_id = await cloneVoice(env, bytes, (name || "Fisher presenter") + " (Fisher poster)", type);
+      const accent = String(request.headers.get("x-accent") || "").toLowerCase().trim();
+      const voice_id = await cloneVoice(env, bytes, (name || "Fisher presenter") + " (Fisher poster)", type, accent);
       return { voice_id, voice_token: await hmac(env, "voice:" + voice_id), slug: slugMake() };
     });
   }
