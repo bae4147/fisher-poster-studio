@@ -187,7 +187,7 @@ button{font:inherit}
       <span class="nm">Jordan · AI host</span></div>
     </div>
     <button id="ppod" type="button">▶ Play the podcast · ~3 min</button>
-    <div class="pctl"><span id="pstat">A 3-minute conversation about the paper</span><button id="pstop" style="display:none">■ stop</button></div>
+    <div class="pctl"><span id="pstat"></span><button id="pstop" style="display:none">■ stop</button></div>
     <div id="pnowx">Click a panel on the poster to hear that section.</div>
     <div id="pnowv" style="margin-top:calc(var(--u)*2);font-size:calc(var(--u)*3);opacity:.55"></div></div>
    <div id="pchat"><div class="hd"><span id="pchatt">Chat</span> <span class="ai">AI</span><small id="pchats"></small></div>
@@ -319,7 +319,7 @@ function podLabel(){$("ppod").textContent=POD.on&&!POD.paused?"❚❚ Pause the 
 function zoomTo(sec){
   if(sec===POD.sec)return;POD.sec=sec;
   if(!sec){closeZoom();return;}
-  const src=document.querySelector('#pmain .zone[data-z="'+sec+'"]');if(src){openZoom(src);const c=$("pzoom").querySelector(".zone");if(c)c.prepend(el("div","podtag","🎙 The podcast is on this panel"));}
+  const src=document.querySelector('#pmain .zone[data-z="'+sec+'"]');if(src){openZoom(src);const c=$("pzoom").querySelector(".zone");if(c){c.prepend(el("div","podtag","🎙 The podcast is on this panel"));const pl=c.querySelector(".pl");if(pl)pl.remove();}}
 }
 function podPlay(i){
   const L=podLines();if(i>=L.length){stopPodcast();$("pstat").textContent="Finished. Play it again anytime.";closeZoom();return;}
@@ -344,7 +344,7 @@ function startPodcast(){
 function stopPodcast(){
   if(!POD.on)return;POD.on=false;POD.paused=false;clearInterval(POD.timer);
   if(POD.audio){try{POD.audio.pause();}catch(e){}}POD.audio=null;POD.next=null;POD.sec=null;
-  talk(null);$("pstop").style.display="none";$("pprog").style.display="none";$("onair").classList.remove("live");$("pstat").textContent="A 3-minute conversation about the paper";podLabel();
+  talk(null);$("pstop").style.display="none";$("pprog").style.display="none";$("onair").classList.remove("live");$("pstat").textContent="";podLabel();
 }
 $("ppod").onclick=startPodcast;
 
