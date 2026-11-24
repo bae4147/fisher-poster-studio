@@ -78,6 +78,14 @@ button{font:inherit}
 .flow .arr{flex:0 0 auto;align-self:center;font-size:calc(var(--u)*7);color:var(--green);font-weight:bold}
 .do .ic{display:block;font-size:calc(var(--u)*9);line-height:1.1;margin-bottom:calc(var(--u)*1)}
 .do div{text-align:left}
+#pmore{grid-column:1/-1;border-top:calc(var(--u)*.8) solid var(--ink);padding-top:calc(var(--u)*3);margin-top:calc(var(--u)*1)}
+#pmore h3{margin:0 0 calc(var(--u)*2.5);font-size:calc(var(--u)*4.2);letter-spacing:calc(var(--u)*.5);color:var(--green)}
+.mgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(var(--u)*2.5)}
+.mcard{display:flex;flex-direction:column;gap:calc(var(--u)*1.2);border:calc(var(--u)*.6) solid var(--ink);background:#fffaf0;padding:calc(var(--u)*2.5);text-decoration:none;color:var(--ink)!important;transition:transform .12s, box-shadow .12s}
+.mcard:hover{transform:translate(calc(var(--u)*-.6),calc(var(--u)*-.6));box-shadow:calc(var(--u)*1.2) calc(var(--u)*1.2) 0 var(--ink)}
+.mcard b{font-size:calc(var(--u)*3.6);line-height:1.3}
+.mcard span{font-size:calc(var(--u)*3);opacity:.7}
+.mcard.cur{background:#e6fff1;border-color:var(--green);pointer-events:none}
 #pfoot{grid-column:1/-1;font-size:calc(var(--u)*3.2);opacity:.7;line-height:1.4}
 #pzoom{position:absolute;inset:0;display:none;z-index:3;background:#0b1418e6;padding:calc(var(--u)*4);overflow:auto;align-items:center;justify-content:center}
 #pzoom.on{display:flex}
@@ -240,6 +248,7 @@ function renderPoster(v){
   const T=p.takeaway,z4=zone("takeaway",true);z4.append(el("p","big",T.headline));const dd=el("div","do");
   (T.tips||[]).forEach(t=>{const d=el("div");if(t.icon)d.append(el("span","ic",t.icon));d.append(el("b",null,t.title+". "),document.createTextNode(t.text));dd.append(d);});z4.append(dd);m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
+  m.append(Object.assign(el("div"),{id:"pmore"}));loadMore(v);
   m.querySelectorAll(".zone").forEach(z=>z.addEventListener("click",()=>{openZoom(z);if(pZone!==z.dataset.z)playZone(z.dataset.z);}));
   $("pnowt").textContent="NOW PLAYING · nothing yet";$("nguest").textContent=v.displayName;
   const hasPod=!!(v.podcast&&p.podcast&&p.podcast.lines&&p.podcast.lines.length);
@@ -250,6 +259,17 @@ function renderPoster(v){
   $("pin").placeholder="Ask "+v.displayName+" about the study…";
   $("plog").innerHTML="";$("psugg").innerHTML="";$("psugg").style.display="";$("pin").disabled=false;$("psend").disabled=false;
   initChat();
+}
+
+/* ---- every poster, listed at the bottom ---- */
+async function loadMore(v){
+  const box=$("pmore");if(!box)return;box.append(el("h3",null,"MORE POSTERS FROM FISHER"));
+  const g=el("div","mgrid");box.append(g);
+  const card=(href,title,who,cur)=>{const a=el("a","mcard"+(cur?" cur":""));a.href=href;a.append(el("b",null,title||"Untitled"),el("span",null,(who||"")+(cur?" · you are here":"")));g.append(a);};
+  card("/lee/","Closer to the leader, above the coworkers? How leader gratitude shapes responses across relational targets","Prof. Hun Whee Lee",false);
+  try{const d=await (await fetch("/api/posters")).json();
+    (d.posters||[]).forEach(p=>card("/p/"+p.slug,p.title,p.displayName,V&&p.slug===V.slug));}
+  catch(e){g.append(el("span",null,"Could not load the list."));}
 }
 
 /* ---- narration ---- */
