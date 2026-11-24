@@ -6,7 +6,7 @@
  *   GET  /api/me                                -> {ok, mine} and a signed per-browser owner cookie
  *   GET  /api/status                            -> which server settings are present (no values)
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
- *   POST /api/voice           (MP3 body)        -> ElevenLabs instant voice clone
+ *   POST /api/voice           (audio body: the original file, WAV or MP3) -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
  *   POST /api/publish         {slug, poster...} -> saves the poster under a new permanent link (older posters are kept);
  *                                                  then deletes the voice clone from ElevenLabs
@@ -269,11 +269,14 @@ function cleanPoster(j, hostKey) {
 }
 
 /* ---------------- voice (ElevenLabs) ---------------- */
-async function cloneVoice(env, bytes, name) {
+const SAMPLE_EXT = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
+  "audio/aac": "aac", "audio/ogg": "ogg", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac" };
+async function cloneVoice(env, bytes, name, type = "audio/mpeg") {
+  if (!SAMPLE_EXT[type]) type = "audio/mpeg";
   const fd = new FormData();
   fd.append("name", name);
   fd.append("description", "Created via Fisher Poster Studio");
-  fd.append("files", new Blob([bytes], { type: "audio/mpeg" }), "voice-sample.mp3");
+  fd.append("files", new Blob([bytes], { type }), "voice-sample." + SAMPLE_EXT[type]);
   const res = await fetch(`${elevenBase(env)}/v1/voices/add`, { method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, accept: "application/json" }, body: fd });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
   const data = await res.json();
@@ -473,7 +476,8 @@ async function api(request, env, url) {
     if (!bytes.byteLength) return err(400, "No voice sample received.", "bad_request");
     if (bytes.byteLength > MAX_VOICE) return err(413, "The voice sample is larger than 10 MB. Trim it and try again.", "too_large");
     return slowJson(async () => {
-      const voice_id = await cloneVoice(env, bytes, (name || "Fisher presenter") + " (Fisher poster)");
+      const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      const voice_id = await cloneVoice(env, bytes, (name || "Fisher presenter") + " (Fisher poster)", type);
       return { voice_id, voice_token: await hmac(env, "voice:" + voice_id), slug: slugMake() };
     });
   }
