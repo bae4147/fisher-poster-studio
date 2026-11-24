@@ -84,7 +84,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
  <div id="envnote" class="notice hidden"></div>
 
  <div id="app">
-  <div class="notice"><b>Early version.</b> Once a poster is made it cannot be edited yet. To change it, build it again (your new poster replaces the old one).</div>
+  <div class="notice"><b>Early version.</b> Once a poster is made it cannot be edited yet. To change it, build it again: every build gets its own new link, and earlier posters stay up.</div>
   <div id="mine" class="notice hidden"></div>
 
   <div class="step" id="s1">
@@ -155,6 +155,7 @@ const MIN_VOICE=30, MAX_VOICE=300, REC_LO=60, REC_HI=180;
 const DECODE_MAX_SECONDS=600;
 const MAX_PDF=30*1024*1024;
 const $=id=>document.getElementById(id);
+const el2=(t,x)=>{const e=document.createElement(t);e.textContent=x;return e;};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=t=>{t=Math.max(0,Math.round(t||0));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");};
 const parseT=s=>{s=String(s||"").trim();if(!s)return NaN;if(s.includes(":")){const [m,x]=s.split(":");return (+m)*60+(+x);}return +s;};
@@ -177,7 +178,10 @@ async function call(path,opts={}){
 async function refreshMe(){
   let me=null;try{me=await call("/api/me");}catch(e){}
   const m=$("mine");
-  if(me&&me.mine){m.innerHTML="";m.append("You already made a poster in this browser: ");const a=document.createElement("a");a.href="/p/"+me.mine.slug;a.textContent=me.mine.title;m.append(a,". Building again replaces it.");m.classList.remove("hidden");}
+  const list=me&&Array.isArray(me.mine)?me.mine:(me&&me.mine?[me.mine]:[]);
+  if(list.length){m.innerHTML="";m.append(el2("b","Posters made in this browser"));const ul=document.createElement("ul");ul.style.margin="6px 0 0";ul.style.paddingLeft="20px";
+    list.forEach(x=>{const li=document.createElement("li");const a=document.createElement("a");a.href="/p/"+x.slug;a.target="_blank";a.rel="noopener";a.textContent=x.title;li.append(a);if(x.displayName)li.append(" · "+x.displayName);ul.append(li);});
+    m.append(ul);m.classList.remove("hidden");}
   else m.classList.add("hidden");
   check();
 }
@@ -382,7 +386,7 @@ $("build").onclick=async()=>{
     const r=await call("/api/publish",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:v.slug,voice_id:v.voice_id,voice_token:v.voice_token,displayName:name,spokenName:spoken,poster})});
     published=true;step("save","done");
     const link=location.origin+"/p/"+r.slug;
-    $("builddone").innerHTML='<b>Your poster is ready.</b> <a href="/p/'+r.slug+'" target="_blank" rel="noopener">Open it</a>. Share this link: <code class="k">'+esc(link)+'</code> <button class="btn sec small" type="button" id="copylink">Copy link</button><br>Editing is not available yet; to change something, build again and the new poster replaces this one.';
+    $("builddone").innerHTML='<b>Your poster is ready.</b> <a href="/p/'+r.slug+'" target="_blank" rel="noopener">Open it</a>. Share this link: <code class="k">'+esc(link)+'</code> <button class="btn sec small" type="button" id="copylink">Copy link</button><br>This link stays up. Editing is not available yet; building again makes a new poster with its own link.';
     $("builddone").classList.remove("hidden");
     $("copylink").onclick=async()=>{try{await navigator.clipboard.writeText(link);$("copylink").textContent="Copied";}catch(e){}};
     refreshMe();loadGallery();

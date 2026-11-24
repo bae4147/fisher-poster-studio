@@ -8,7 +8,7 @@
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
  *   POST /api/voice           (MP3 body)        -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
- *   POST /api/publish         {slug, poster...} -> saves the poster; replaces this browser's older poster;
+ *   POST /api/publish         {slug, poster...} -> saves the poster under a new permanent link (older posters are kept);
  *                                                  then deletes the voice clone from ElevenLabs
  *   POST /api/voice/discard   {voice, token}    -> deletes a voice clone after a failed build
  *   GET  /api/posters                           -> gallery list
@@ -64,6 +64,8 @@ async function ownerCookie(env, id) {
   return `${COOKIE}=${encodeURIComponent(id + "." + await hmac(env, "owner:" + id))}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`;
 }
 const ownerKey = id => "owner:" + id;
+/* Older records stored a single slug; newer ones store a JSON list. */
+const ownedSlugs = raw => { if (!raw) return []; try { const a = JSON.parse(raw); if (Array.isArray(a)) return a.filter(x => /^[a-z0-9]{6,20}$/.test(x)); } catch {} return /^[a-z0-9]{6,20}$/.test(raw) ? [raw] : []; };
 const slugMake = () => { const a = "abcdefghjkmnpqrstuvwxyz23456789"; return [...crypto.getRandomValues(new Uint8Array(10))].map(x => a[x % a.length]).join(""); };
 
 /* Keep slow upstream calls alive: stream a space every 8 s, then the JSON. Clients trim and parse. */
@@ -307,9 +309,11 @@ async function api(request, env, url) {
   if (p === "/api/me") {
     let id = await owner(request, env), headers = {};
     if (!id) { id = slugMake() + slugMake(); headers["set-cookie"] = await ownerCookie(env, id); }
-    let mine = null;
-    const slug = await env.POSTERS.get(ownerKey(id));
-    if (slug) { const v = await env.POSTERS.get("poster:" + slug, "json"); if (v) mine = { slug, title: v.poster.title }; }
+    const mine = [];
+    for (const slug of ownedSlugs(await env.POSTERS.get(ownerKey(id))).slice(0, 30)) {
+      const v = await env.POSTERS.get("poster:" + slug, "json");
+      if (v) mine.push({ slug, title: v.poster.title, displayName: v.displayName });
+    }
     return json({ ok: true, mine }, 200, headers);
   }
 
@@ -421,14 +425,9 @@ async function api(request, env, url) {
     for (let i = 0; i < podN; i++) if (!(await env.POSTERS.get(`audio:${slug}:pod-${i}`, "arrayBuffer"))) return err(400, "Podcast audio is missing. Build again.", "missing_audio");
     const createdAt = Date.now();
     await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
-    const ck = ownerKey(ownerId), old = await env.POSTERS.get(ck);
-    await env.POSTERS.put(ck, slug);
-    if (old && old !== slug) {
-      const ov = await env.POSTERS.get("poster:" + old, "json");
-      await env.POSTERS.delete("poster:" + old);
-      for (const k of SECTIONS) await env.POSTERS.delete(`audio:${old}:${k}`);
-      for (let i = 0; i < ((ov && ov.podcast) || 0); i++) await env.POSTERS.delete(`audio:${old}:pod-${i}`);
-    }
+    /* Every build gets its own permanent link; earlier posters are kept. */
+    const ck = ownerKey(ownerId), list = ownedSlugs(await env.POSTERS.get(ck));
+    await env.POSTERS.put(ck, JSON.stringify([slug, ...list.filter(x => x !== slug)].slice(0, 200)));
     const voiceDeleted = await deleteVoice(env, b.voice_id);
     return json({ ok: true, slug, url: new URL("/p/" + slug, url).toString(), voiceDeleted });
   }
