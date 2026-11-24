@@ -317,28 +317,39 @@ async function hostVoice(env, refresh = false) {
   return pick.voice_id;
 }
 
-/* ---------------- pixel-art avatar from a photo (OpenAI image edits) ---------------- */
+/* ---------------- simple pixel character from a photo ----------------
+   A vision call reads a few visible traits (skin tone, hair, glasses, facial hair, clothing); the page then
+   assembles a 16 x 16 sprite from fixed parts (public/lib/sprite.js). The photo itself is never stored. */
 const MAX_PHOTO = 8 * 1024 * 1024;
-const AVATAR_PROMPT = `Redraw the person in this photo as a 16-bit pixel-art bust portrait (head and shoulders) for a retro, game-like research poster.
-Front-facing, friendly neutral expression, centered, square composition with the shoulders reaching the bottom edge.
-Chunky, clearly visible pixels (roughly 48 by 48 pixel grid scaled up), flat colors, a dark 1-pixel outline, limited palette, no gradients, no dithering noise.
-Keep the person's recognizable features: hair style and color, face shape, skin tone, glasses, facial hair and the kind of clothing they wear.
-Plain transparent background. No text, no logos, no frame, no props.`;
-async function makeAvatar(env, bytes, type) {
-  const fd = new FormData();
-  fd.append("model", env.IMAGE_MODEL || "gpt-image-1.5");
-  fd.append("image[]", new Blob([bytes], { type }), "photo." + (type.split("/")[1] || "png"));
-  fd.append("prompt", AVATAR_PROMPT);
-  fd.append("size", "1024x1024");
-  fd.append("quality", env.IMAGE_QUALITY || "medium");
-  fd.append("background", "transparent");
-  fd.append("output_format", "webp");
-  fd.append("output_compression", "85");
-  const res = await fetch(`${openaiBase(env)}/v1/images/edits`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` }, body: fd });
-  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI (image)"), "upstream");
-  const b64 = (await res.json())?.data?.[0]?.b64_json;
-  if (!b64) throw new UpstreamError("The image model returned no picture.", "upstream");
-  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+const HAIR_STYLES = ["short", "side_part", "spiky", "curly", "medium", "long", "bun", "buzz", "bald"];
+const TOPS = ["suit_tie", "suit", "shirt", "sweater", "blouse", "tshirt"];
+const LOOK_SCHEMA = { type: "object", additionalProperties: false, required: ["skin", "hair_color", "hair_style", "glasses", "facial_hair", "top", "top_color", "tie_color"], properties: {
+  skin: S("Skin tone as a hex color like #b07a55"), hair_color: S("Hair color as a hex color"),
+  hair_style: { type: "string", enum: HAIR_STYLES }, glasses: { type: "string", enum: ["none", "clear", "dark"] },
+  facial_hair: { type: "string", enum: ["none", "stubble", "mustache", "beard"] },
+  top: { type: "string", enum: TOPS }, top_color: S("Main clothing color as hex (jacket if wearing one)"), tie_color: S("Tie color as hex, or #000000 if no tie") } };
+/* AC's look, read from the photo he provided; used until a host character is saved from /admin.html */
+const BUILTIN_HOST_LOOKS = { ac: { skin: "#b07a55", hair_color: "#1b1b1f", hair_style: "side_part", glasses: "none", facial_hair: "none", top: "suit_tie", top_color: "#1f1f26", tie_color: "#c45a6a" } };
+function cleanLook(j) {
+  const hex = (v, d) => /^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v) : d;
+  return { skin: hex(j?.skin, "#c98f62"), hair_color: hex(j?.hair_color, "#2b2b2b"),
+    hair_style: HAIR_STYLES.includes(j?.hair_style) ? j.hair_style : "short",
+    glasses: ["none", "clear", "dark"].includes(j?.glasses) ? j.glasses : "none",
+    facial_hair: ["none", "stubble", "mustache", "beard"].includes(j?.facial_hair) ? j.facial_hair : "none",
+    top: TOPS.includes(j?.top) ? j.top : "shirt", top_color: hex(j?.top_color, "#2e4a7a"), tie_color: hex(j?.tie_color, "#c2410c") };
+}
+async function describeLook(env, bytes, type) {
+  let bin = ""; const u = new Uint8Array(bytes); for (let i = 0; i < u.length; i += 32768) bin += String.fromCharCode(...u.subarray(i, i + 32768));
+  const body = {
+    model: env.OPENAI_LOOK_MODEL || env.OPENAI_CHAT_MODEL || "gpt-6-luna",
+    input: [{ role: "user", content: [
+      { type: "input_text", text: "Describe this person's visible appearance so a very simple 16x16 pixel-art character can be drawn of them. Report only what the photo clearly shows: choose glasses or facial hair only if they are plainly visible. Colors as hex codes sampled from the photo." },
+      { type: "input_image", image_url: `data:${type};base64,${btoa(bin)}`, detail: "low" } ] }],
+    text: { format: { type: "json_schema", name: "look", strict: true, schema: LOOK_SCHEMA } }
+  };
+  const res = await fetch(`${openaiBase(env)}/v1/responses`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI (photo)"), "upstream");
+  return cleanLook(JSON.parse(outputText(await res.json())));
 }
 async function readPhoto(request) {
   const type = (request.headers.get("content-type") || "").split(";")[0].trim();
@@ -513,9 +524,9 @@ async function api(request, env, url) {
     if (!/^[a-z0-9]{6,20}$/.test(slug)) return err(400, "Bad request.", "bad_request");
     const ph = await readPhoto(request); if (ph.error) return ph.error;
     return slowJson(async () => {
-      const img = await makeAvatar(env, ph.bytes, ph.type);
-      await env.POSTERS.put(`avatar:${slug}`, img, { metadata: { type: "image/webp" } });
-      return { ok: true, bytes: img.byteLength };
+      const look = await describeLook(env, ph.bytes, ph.type);
+      await env.POSTERS.put(`avatar:${slug}`, JSON.stringify(look));
+      return { ok: true, look };
     });
   }
 
@@ -527,9 +538,9 @@ async function api(request, env, url) {
     if (!["ac", "hun"].includes(host)) return err(400, "Unknown host.", "bad_request");
     const ph = await readPhoto(request); if (ph.error) return ph.error;
     return slowJson(async () => {
-      const img = await makeAvatar(env, ph.bytes, ph.type);
-      await env.POSTERS.put(`host_avatar:${host}`, img, { metadata: { type: "image/webp" } });
-      return { ok: true, url: `/avatar/host-${host}.webp` };
+      const look = await describeLook(env, ph.bytes, ph.type);
+      await env.POSTERS.put(`host_avatar:${host}`, JSON.stringify(look));
+      return { ok: true, look };
     });
   }
 
@@ -545,7 +556,7 @@ async function api(request, env, url) {
     const podN = poster.podcast.lines.length;
     for (let i = 0; i < podN; i++) if (!(await env.POSTERS.get(`audio:${slug}:pod-${i}`, "arrayBuffer"))) return err(400, "Podcast audio is missing. Build again.", "missing_audio");
     const createdAt = Date.now();
-    const avatar = !!(await env.POSTERS.get(`avatar:${slug}`, "arrayBuffer"));
+    const avatar = !!(await env.POSTERS.get(`avatar:${slug}`));
     await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN, avatar }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
     /* Every build gets its own permanent link; earlier posters are kept. */
     const ck = ownerKey(ownerId), list = ownedSlugs(await env.POSTERS.get(ck));
@@ -564,11 +575,12 @@ export default {
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
       if (p.startsWith("/api/")) return await api(request, env, url);
-      const av = p.match(/^\/avatar\/(host-(ac|hun)|[a-z0-9]{6,20})\.webp$/);
+      const av = p.match(/^\/avatar\/(host-(ac|hun)|[a-z0-9]{6,20})\.json$/);
       if (av) {
-        const img = await env.POSTERS.get(av[2] ? `host_avatar:${av[2]}` : `avatar:${av[1]}`, "arrayBuffer");
-        if (!img) return new Response("Not found", { status: 404 });
-        return new Response(img, { headers: { "content-type": "image/webp", "cache-control": av[2] ? "public, max-age=300" : "public, max-age=86400" } });
+        let look = await env.POSTERS.get(av[2] ? `host_avatar:${av[2]}` : `avatar:${av[1]}`, "json");
+        if (!look && av[2]) look = BUILTIN_HOST_LOOKS[av[2]] || null;
+        if (!look) return new Response("Not found", { status: 404 });
+        return new Response(JSON.stringify(cleanLook(look)), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300" } });
       }
       let m = p.match(new RegExp("^/audio/([a-z0-9]{6,20})/(" + SECTIONS.join("|") + "|pod-\\d{1,2})\\.mp3$"));
       if (m) {

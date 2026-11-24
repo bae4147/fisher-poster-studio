@@ -22,19 +22,21 @@
   .msg{margin-top:12px}.bad{color:#b91c1c}.ok{color:#047857}
   .cur{display:flex;gap:16px}
   .cur figure{margin:0;text-align:center;font-size:13px;color:#4b5563}
-  .cur img{width:96px;height:96px;border-radius:8px;border:1px solid #e5e7eb;background:#e8f4ff;object-fit:contain;image-rendering:pixelated;display:block;margin-bottom:4px}
+  .spr{width:96px;height:96px;border-radius:8px;border:1px solid #e5e7eb;background:#1a1530;margin-bottom:4px;padding:8px;box-sizing:border-box}
+  .spr svg{width:100%;height:100%;display:block}
+  .row .spr{width:120px;height:120px}
 </style>
 </head>
 <body>
 <main>
   <h1>Podcast host characters</h1>
-  <p class="sub">Make the pixel-art character used for a podcast host from a photo. Hosts without one use the default character. The photo is sent to OpenAI once and is not stored; only the character is saved.</p>
+  <p class="sub">Make the simple pixel character used for a podcast host from a photo. AI reads a few visible traits (skin tone, hair, glasses, facial hair, clothing) and the character is built from fixed pixel parts. The photo is sent to OpenAI once and is not stored; only the traits are saved.</p>
 
   <div class="card">
     <label>Current characters</label>
     <div class="cur">
-      <figure><img id="cur-ac" alt=""><span>Aravind Chandrasekaran</span></figure>
-      <figure><img id="cur-hun" alt=""><span>Hun Whee Lee</span></figure>
+      <figure><div id="cur-ac" class="spr"></div><span>Aravind Chandrasekaran</span></figure>
+      <figure><div id="cur-hun" class="spr"></div><span>Hun Whee Lee</span></figure>
     </div>
   </div>
 
@@ -45,15 +47,16 @@
     <select id="host"><option value="ac">Aravind Chandrasekaran</option><option value="hun">Hun Whee Lee</option></select>
     <label for="photo">Photo (JPG, PNG or WebP)</label>
     <input type="file" id="photo" accept="image/jpeg,image/png,image/webp">
-    <div class="row"><img id="prev" alt="" style="display:none"><img id="out" alt="" style="display:none"></div>
+    <div class="row"><img id="prev" alt="" style="display:none"><div id="out" class="spr" style="display:none"></div></div>
     <label class="consent"><input type="checkbox" id="ok"><span>This host agreed to an AI pixel-art character made from this photo being shown on Fisher posters.</span></label>
     <button id="go" disabled>Make character</button>
     <div class="msg" id="msg"></div>
   </div>
 </main>
+<script src="/lib/sprite.js"></script>
 <script>
 const $=id=>document.getElementById(id);let blob=null;
-function showCurrent(){for(const h of ["ac","hun"]){const i=$("cur-"+h);i.src="/avatar/host-"+h+".webp?t="+Date.now();i.onerror=()=>{i.removeAttribute("src");i.alt="default";};}}
+async function showCurrent(){for(const h of ["ac","hun"]){let look=null;try{const r=await fetch("/avatar/host-"+h+".json?t="+Date.now());if(r.ok)look=await r.json();}catch(e){}$("cur-"+h).innerHTML=spriteSVG(look||{});}}
 showCurrent();
 fetch("/api/me",{credentials:"same-origin"}).catch(()=>{});   // sets the browser session the API needs
 function check(){$("go").disabled=!(blob&&$("ok").checked&&$("code").value.trim());}
@@ -70,7 +73,7 @@ $("go").addEventListener("click",async()=>{
     const res=await fetch("/api/host-avatar?host="+$("host").value,{method:"POST",credentials:"same-origin",headers:{"content-type":"image/jpeg","x-admin-code":$("code").value.trim()},body:blob});
     const t=(await res.text()).trim();let d={};try{d=JSON.parse(t);}catch(e){}
     if(d.error)throw d.error;if(!d.ok)throw {message:"Unexpected reply ("+res.status+")."};
-    $("out").src=d.url+"?t="+Date.now();$("out").style.display="block";$("msg").className="msg ok";$("msg").textContent="Saved. New podcasts and existing posters with this host now show this character.";showCurrent();
+    $("out").innerHTML=spriteSVG(d.look);$("out").style.display="block";$("msg").className="msg ok";$("msg").textContent="Saved. New podcasts and existing posters with this host now show this character.";showCurrent();
   }catch(e){$("msg").className="msg bad";$("msg").textContent=e.message||"Something went wrong.";}
   check();
 });
