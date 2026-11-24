@@ -271,6 +271,27 @@ async function tts(env, voiceId, text, ctx = {}) {
   return res.arrayBuffer();
 }
 
+/* The podcast host speaks in a stock ElevenLabs voice. Stock voices differ between accounts,
+   so use HOST_VOICE_ID if it works, otherwise pick a premade voice this account has (never a clone). */
+async function hostVoice(env, refresh = false) {
+  if (!refresh) {
+    const cached = await env.POSTERS.get("host_voice");
+    if (cached) return cached;
+    if (env.HOST_VOICE_ID) return env.HOST_VOICE_ID;
+  }
+  const res = await fetch(`${elevenBase(env)}/v1/voices`, { headers: { "xi-api-key": env.ELEVENLABS_API_KEY, accept: "application/json" } });
+  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs (voice list)"), "upstream");
+  const voices = ((await res.json()).voices || []).filter(v => v && v.voice_id && v.category !== "cloned" && !/Fisher Poster Studio/.test(v.description || ""));
+  const prefer = ["Sarah", "Jessica", "Laura", "Alice", "Matilda", "River", "Brian", "Eric", "Chris", "Daniel", "Liam", "Will"];
+  const pick = voices.filter(v => v.category === "premade").sort((a, b) => {
+    const ia = prefer.findIndex(n => (a.name || "").startsWith(n)), ib = prefer.findIndex(n => (b.name || "").startsWith(n));
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  })[0] || voices[0];
+  if (!pick) throw new UpstreamError("No stock ElevenLabs voice is available for the podcast host. Add one in ElevenLabs (Voices → Voice Library) and try again.", "no_host_voice");
+  await env.POSTERS.put("host_voice", pick.voice_id, { expirationTtl: 60 * 60 * 24 * 7 });
+  return pick.voice_id;
+}
+
 /* ---------------- chat ---------------- */
 function chatSystem(v) {
   return `You are an AI version of ${v.displayName}, created with their consent, standing at the poster for their paper (summarized below) on an interactive web poster about Fisher College of Business faculty research. Visitors are students and members of the public. Speak in the first person as the author ("we found", "in our second study").
@@ -408,9 +429,17 @@ async function api(request, env, url) {
     if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id || "") || voice_token !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
     if (!/^[a-z0-9]{6,20}$/.test(slug || "") || !Number.isInteger(i) || i < 0 || i >= MAX_POD_LINES) return err(400, "Bad request.", "bad_request");
     if (!text || text.length > MAX_POD_LINE) return err(400, "The line is empty or too long.", "bad_request");
-    const voice = b.speaker === "host" ? (env.HOST_VOICE_ID || "EXAVITQu4vr4xnwDTk1Y") : voice_id;
+    const ctx = { previous_text: String(b.previous_text || ""), next_text: String(b.next_text || "") };
     return slowJson(async () => {
-      const audio = await tts(env, voice, text, { previous_text: String(b.previous_text || ""), next_text: String(b.next_text || "") });
+      let audio;
+      if (b.speaker === "host") {
+        try { audio = await tts(env, await hostVoice(env), text, ctx); }
+        catch (e) {
+          if (!/error 404|voice_not_found|not found/i.test(String(e.message))) throw e;
+          await env.POSTERS.delete("host_voice");
+          audio = await tts(env, await hostVoice(env, true), text, ctx);   // the saved/default voice is gone: pick again
+        }
+      } else audio = await tts(env, voice_id, text, ctx);
       await env.POSTERS.put(`audio:${slug}:pod-${i}`, audio, { metadata: { bytes: audio.byteLength } });
       return { ok: true, bytes: audio.byteLength };
     });
