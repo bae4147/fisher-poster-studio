@@ -94,6 +94,11 @@ function outputText(data) {
 
 /* ---------------- poster drafting (OpenAI) ---------------- */
 const S = (desc, extra = {}) => ({ type: "string", description: desc, ...extra });
+const ICONS = ["🏥","🩺","💊","❤️","🧠","👥","🤝","💬","🗣️","📈","📉","📊","🔁","⚙️","🔧","🧪","🔬","📋","⏱️","📅","🎯","💡","⚖️","🧭","🏭","💼","🏢","🌱","🔍","❓","⚠️","✅","🛡️","💰","🧮","🖥️","🤖","📚","🎓","🏠","🧩","🔗","🙏","😟","😊","🌍","🚀","⭐"];
+const ICON = (desc = "An icon that fits") => ({ type: "string", enum: ICONS, description: desc });
+const LINE = { type: "array", items: S("One plain sentence, max 25 words"), description: "Exactly 1 sentence" };
+const NODE = { type: "object", additionalProperties: false, required: ["label", "sign"], properties: {
+  label: S("Construct name, 1-4 plain words"), sign: { type: "string", enum: ["+", "-", ""], description: "Direction of its effect on the next box to the right (for moderators: how it changes the link); empty if not stated" } } };
 const POSTER_SCHEMA = {
   type: "object", additionalProperties: false,
   required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "brief", "suggested_questions"],
@@ -101,27 +106,33 @@ const POSTER_SCHEMA = {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
     venue: S("Journal or outlet, year, volume/article info if present"),
-    introduction: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
-      headline: S("One-sentence hook that introduces the topic, max 22 words"),
-      paragraphs: { type: "array", items: S("35-60 words"), description: "1-2 short paragraphs: the topic, the background, and the research question" } } },
-    motivation: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
-      headline: S("Why this question matters, one sentence, max 20 words"),
-      paragraphs: { type: "array", items: S("35-60 words"), description: "1-2 short paragraphs: the real-world problem and the gap in what we knew that made this study worth doing" } } },
-    narrative: { type: "object", additionalProperties: false, required: ["headline", "paragraphs"], properties: {
-      headline: S("The core idea in one sentence, max 22 words"),
-      paragraphs: { type: "array", items: S("35-60 words"), description: "Exactly 2 short paragraphs: the theoretical idea; what we predicted and why" } } },
-    findings: { type: "object", additionalProperties: false, required: ["headline", "points", "stats"], properties: {
-      headline: S("Main result in one sentence, max 22 words"),
-      points: { type: "array", items: S("Max 28 words, plain language"), description: "3-4 key findings" },
-      stats: { type: "array", description: "2-4 numbers that appear in the paper", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
-        value: S("A short number or ratio exactly as reported, e.g. 4/4, .59, 524"), label: S("What it is, max 9 words") } } } } },
-    methods: { type: "object", additionalProperties: false, required: ["studies", "note"], properties: {
-      studies: { type: "array", description: "1-4 items (group extra studies)", items: { type: "object", additionalProperties: false, required: ["name", "detail", "tag"], properties: {
-        name: S("e.g. Study 1 · Field survey"), detail: S("Sample, design, setting in max 30 words"), tag: S("2-3 word design label") } } },
-      note: S("One sentence on why this design, max 30 words") } },
-    takeaway: { type: "object", additionalProperties: false, required: ["headline", "tips"], properties: {
-      headline: S("The practical lesson in one sentence, max 18 words"),
-      tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["title", "text"], properties: { title: S("2-5 words"), text: S("Max 24 words") } } } } },
+    introduction: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs"], properties: {
+      icon: ICON(), headline: S("Hook that introduces the topic, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: the research question" } } },
+    motivation: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs"], properties: {
+      icon: ICON(), headline: S("Why this matters, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: the problem or gap that made this study worth doing" } } },
+    narrative: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs", "model"], properties: {
+      icon: ICON(), headline: S("The core idea, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: what we predicted and why" },
+      model: { type: "object", additionalProperties: false, required: ["predictors", "mediators", "outcomes", "moderators"], description: "The paper's research model as a left-to-right diagram, using only constructs the paper names", properties: {
+        predictors: { type: "array", items: NODE, description: "1-3 starting constructs (causes, interventions, conditions)" },
+        mediators: { type: "array", items: NODE, description: "0-2 mechanisms in between; empty if none" },
+        outcomes: { type: "array", items: NODE, description: "1-3 outcomes (sign empty)" },
+        moderators: { type: "array", items: NODE, description: "0-2 conditions that change the effect; empty if none" } } } } },
+    findings: { type: "object", additionalProperties: false, required: ["icon", "headline", "points", "stats", "chart"], properties: {
+      icon: ICON(), headline: S("Main result, max 15 words"),
+      points: { type: "array", description: "Exactly 3 key findings", items: { type: "object", additionalProperties: false, required: ["icon", "text"], properties: { icon: ICON(), text: S("Max 12 words, plain language") } } },
+      stats: { type: "array", description: "2-3 numbers that appear in the paper", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
+        value: S("A short number or ratio exactly as reported, e.g. 4/4, .59, 524"), label: S("What it is, max 6 words") } } },
+      chart: { type: "object", additionalProperties: false, required: ["title", "bars"], description: "A simple bar chart comparing values the paper reports in the same unit (e.g., treatment vs. control, scenario A vs. B). Leave bars empty if the paper has no such comparison.", properties: {
+        title: S("What the bars compare, with the unit, max 10 words"),
+        bars: { type: "array", description: "0 or 2-5 bars", items: { type: "object", additionalProperties: false, required: ["label", "value", "shown"], properties: {
+          label: S("Bar label, max 4 words"), value: { type: "number", description: "The value as a number, for bar length" }, shown: S("The value exactly as reported, e.g. 3.42, 18%") } } } } } } },
+    methods: { type: "object", additionalProperties: false, required: ["icon", "studies"], properties: {
+      icon: ICON(),
+      studies: { type: "array", description: "1-3 steps or studies in order (group extra studies)", items: { type: "object", additionalProperties: false, required: ["icon", "name", "detail", "tag"], properties: {
+        icon: ICON(), name: S("e.g. Study 1 · Field survey, max 5 words"), detail: S("Sample or setting, max 15 words"), tag: S("2-3 word design label") } } } } },
+    takeaway: { type: "object", additionalProperties: false, required: ["icon", "headline", "tips"], properties: {
+      icon: ICON(), headline: S("The practical lesson, max 12 words"),
+      tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
     scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
@@ -136,7 +147,11 @@ Accuracy rules:
 
 Content rules:
 - The panels run in this order and must not repeat each other: introduction (topic and research question), motivation (why it matters and what was missing), narrative (theory and predictions), findings, methods, takeaway.
-- methods.studies: 1-4 items, grouping extra studies. takeaway.tips: exactly 3. findings.stats: 2-4 items, only numbers that appear in the paper.
+- The poster is visual: keep on-screen text very short and respect every word limit. The narration scripts carry the explanation, so the panels need only the gist.
+- methods.studies: 1-3 items, grouping extra studies. takeaway.tips: exactly 3. findings.points: exactly 3. findings.stats: 2-3 items, only numbers that appear in the paper.
+- narrative.model: draw the model the paper actually tests, using its constructs in plain words. If the study has no clear causal model (for example a simulation), show its main drivers and outcomes.
+- findings.chart: only values the paper reports, in one shared unit. If there is no clean comparison, return an empty bars array rather than forcing one.
+- Choose icons that make each item easy to recognize at a glance.
 - brief: research question, theory, hypotheses and which were supported, every study's sample and design, key numbers, boundary conditions, limitations, future directions, practical implications.
 
 Narration scripts (read aloud by an AI voice of the author; introduction and motivation 70-100 words, about 30-40 seconds; the other four 130-165 words, about 55-65 seconds):
@@ -185,15 +200,23 @@ async function draftPoster(env, fileId, spoken, notes = {}) {
 function cleanPoster(j) {
   const St = (v, n) => String(v == null ? "" : v).trim().slice(0, n || 600);
   const A = (v, n) => Array.isArray(v) ? v.slice(0, n) : [];
+  const Ic = v => ICONS.includes(v) ? v : "";
+  const Sg = v => v === "+" || v === "-" ? v : "";
+  const nodes = (v, n) => A(v, n).map(x => ({ label: St(x?.label, 50), sign: Sg(x?.sign) })).filter(x => x.label);
+  const text = (o, n) => ({ icon: Ic(o?.icon), headline: St(o?.headline, 240), paragraphs: A(o?.paragraphs, n).map(x => St(x, 600)).filter(Boolean) });
+  const m = j.narrative?.model || {};
+  let bars = A(j.findings?.chart?.bars, 5).map(b => ({ label: St(b?.label, 40), value: Number(b?.value), shown: St(b?.shown, 20) })).filter(b => b.label && Number.isFinite(b.value) && b.value >= 0);
+  if (bars.length < 2) bars = [];
   const p = {
     title: St(j.title, 300), authors: A(j.authors, 20).map(x => St(x, 80)).filter(Boolean), venue: St(j.venue, 200),
-    introduction: { headline: St(j.introduction?.headline, 240), paragraphs: A(j.introduction?.paragraphs, 2).map(x => St(x, 600)).filter(Boolean) },
-    motivation: { headline: St(j.motivation?.headline, 240), paragraphs: A(j.motivation?.paragraphs, 2).map(x => St(x, 600)).filter(Boolean) },
-    narrative: { headline: St(j.narrative?.headline, 240), paragraphs: A(j.narrative?.paragraphs, 3).map(x => St(x, 600)).filter(Boolean) },
-    findings: { headline: St(j.findings?.headline, 240), points: A(j.findings?.points, 5).map(x => St(x, 300)).filter(Boolean),
-      stats: A(j.findings?.stats, 4).map(s => ({ value: St(s?.value, 16), label: St(s?.label, 90) })).filter(s => s.value) },
-    methods: { studies: A(j.methods?.studies, 4).map(s => ({ name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
-    takeaway: { headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
+    introduction: text(j.introduction, 2), motivation: text(j.motivation, 2),
+    narrative: { ...text(j.narrative, 3), model: { predictors: nodes(m.predictors, 3), mediators: nodes(m.mediators, 2), outcomes: nodes(m.outcomes, 3), moderators: nodes(m.moderators, 2) } },
+    findings: { icon: Ic(j.findings?.icon), headline: St(j.findings?.headline, 240),
+      points: A(j.findings?.points, 4).map(x => typeof x === "string" ? { icon: "", text: St(x, 300) } : { icon: Ic(x?.icon), text: St(x?.text, 300) }).filter(x => x.text),
+      stats: A(j.findings?.stats, 4).map(s => ({ value: St(s?.value, 16), label: St(s?.label, 90) })).filter(s => s.value),
+      chart: { title: St(j.findings?.chart?.title, 120), bars } },
+    methods: { icon: Ic(j.methods?.icon), studies: A(j.methods?.studies, 4).map(s => ({ icon: Ic(s?.icon), name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
+    takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
