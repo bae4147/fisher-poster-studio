@@ -273,7 +273,10 @@ function renderPoster(v){
   (T.tips||[]).forEach(t=>{const d=el("div");if(t.icon)d.append(el("span","ic",t.icon));d.append(el("b",null,t.title+". "),document.createTextNode(t.text));dd.append(d);});z4.append(dd);m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
   loadMore(v);
-  m.querySelectorAll(".zone").forEach(z=>z.addEventListener("click",()=>{openZoom(z);if(pZone!==z.dataset.z)playZone(z.dataset.z);}));
+  m.querySelectorAll(".zone").forEach(z=>{
+    z.addEventListener("click",()=>{openZoom(z);if(pZone!==z.dataset.z)playZone(z.dataset.z);});
+    const pl=z.querySelector(".pl");if(pl)pl.addEventListener("click",e=>{if(pZone===z.dataset.z){e.stopPropagation();playZone(z.dataset.z);}});   // pause/resume without reopening
+  });
   $("nguest").textContent=v.displayName;
   const hasPod=!!(v.podcast&&p.podcast&&p.podcast.lines&&p.podcast.lines.length);
   $("pnow").classList.toggle("hidden",!hasPod);
@@ -305,11 +308,11 @@ function stopNarration(){if(pAudio){try{pAudio.pause();}catch(e){}pAudio=null;}c
 function playZone(key){
   if(!V)return;
   if(POD.on&&!POD.paused)return;   // while the podcast plays, panels can be viewed but not narrated
-  if(pZone===key){stopNarration();return;}
+  if(pZone===key&&pAudio){if(pAudio.paused){const r=pAudio.play();if(r&&r.catch)r.catch(()=>{});}else pAudio.pause();syncZoom();return;}   // same panel: pause / resume
   stopPodcast();stopNarration();pZone=key;
   const src=document.querySelector('#pmain .zone[data-z="'+key+'"]');if(src)src.classList.add("playing");
   const c=$("pzoom").querySelector(".zone");if(!(zoomOpen()&&c&&c.dataset.z===key)&&src)openZoom(src);
-  const a=new Audio(V.urls[key]);pAudio=a;
+  const a=new Audio(V.urls[key]);pAudio=a;a.addEventListener("pause",syncZoom);a.addEventListener("play",syncZoom);
   a.addEventListener("ended",()=>{if(pAudio===a){stopNarration();const t=$("pzoom").querySelector(".ntalk");}});
   const pr=a.play();if(pr&&pr.catch)pr.catch(()=>{});
   pTimer=setInterval(()=>{const bar=$("pzoom").querySelector(".nbar i");if(pAudio===a&&a.duration&&bar)bar.style.width=(100*a.currentTime/a.duration)+"%";},200);
@@ -367,9 +370,13 @@ function openZoom(src){
   c.addEventListener("click",e=>e.stopPropagation());
   zb.appendChild(c);zb.classList.add("on");zb.scrollTop=0;syncZoom();
 }
+function plState(key){return pZone===key&&pAudio?(pAudio.paused?"paused":"playing"):"idle";}
+function setPl(pl,key){if(!pl)return;const st=plState(key);pl.textContent=st==="playing"?"❚❚":"▶";pl.title=st==="playing"?"Pause":st==="paused"?"Resume":"Hear "+firstName()+" explain this panel";}
 function syncZoom(){
+  document.querySelectorAll("#pmain .zone").forEach(z=>setPl(z.querySelector(".pl"),z.dataset.z));   // buttons on the poster itself
   const c=$("pzoom").querySelector(".zone");if(!c)return;const on=pZone===c.dataset.z;c.classList.toggle("playing",on);
-  const pl=c.querySelector(".pl");if(pl){pl.textContent=on?"■":PL_IDLE();pl.title=on?"Stop":"Hear "+firstName()+" explain this panel";}
+  setPl(c.querySelector(".pl"),c.dataset.z);
+  const tk=$("pzoom").querySelector(".ntalk");if(tk)tk.classList.toggle("done",plState(c.dataset.z)==="paused");
   /* the talking author sits just above the zoomed panel, outside it */
   let t=$("pzoom").querySelector(".ntalk");
   if(on&&!t){t=el("div","ntalk");t.style.setProperty("--u",zoomScale());t.innerHTML=$("wguest").querySelector("svg").outerHTML;const bar=el("div","nbar");bar.append(el("i"));t.append(bar);t.addEventListener("click",e=>e.stopPropagation());$("pzoom").insertBefore(t,c);}
