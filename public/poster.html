@@ -97,7 +97,7 @@ button{font:inherit}
 @keyframes pz{from{transform:scale(.55);opacity:.2}to{transform:scale(1);opacity:1}}
 #pside{display:flex;flex-direction:column;gap:calc(var(--u)*3);min-height:0}
 #pback{flex:0 0 auto;font-size:calc(var(--u)*3.4);background:var(--ink);color:var(--paper);border:calc(var(--u)*.6) solid #3a4a50;padding:calc(var(--u)*.8) calc(var(--u)*2.5);cursor:pointer;text-align:center;text-decoration:none}
-#pnow{background:var(--plum);border:calc(var(--u)) solid var(--paper);padding:calc(var(--u)*3);font-size:calc(var(--u)*3.8);line-height:1.42;max-height:58%;overflow:auto;flex:0 0 auto}
+#pnow{background:var(--plum);border:calc(var(--u)) solid var(--paper);padding:calc(var(--u)*3);font-size:calc(var(--u)*3.8);line-height:1.42;overflow:visible;position:relative;z-index:5;flex:0 0 auto}
 #pnow .lbl{color:var(--mint);font-size:calc(var(--u)*3.4);letter-spacing:calc(var(--u)*.3);margin-bottom:calc(var(--u)*1.2);display:flex;justify-content:space-between;gap:calc(var(--u)*2)}
 #pnow button{font-size:calc(var(--u)*3.4);background:#2c2552;color:var(--paper);border:calc(var(--u)*.6) solid #6b5fbb;padding:0 calc(var(--u)*2);cursor:pointer}
 #stage{display:flex;justify-content:center;gap:calc(var(--u)*8);margin:calc(var(--u)*2) 0 calc(var(--u)*1)}
@@ -115,6 +115,10 @@ button{font:inherit}
 #ppod{display:block;width:100%;margin:calc(var(--u)*1.5) 0 calc(var(--u)*1);font-size:calc(var(--u)*3.8)!important;background:var(--gold)!important;color:var(--plum)!important;border:calc(var(--u)*.6) solid var(--paper)!important;padding:calc(var(--u)*1.4)!important;font-weight:bold}
 #pnowx{display:none}
 #pnow .lbl{align-items:center}
+#pnow .hr{display:flex;align-items:center;gap:calc(var(--u)*1.5)}
+#pinfo{position:relative;display:inline-flex;align-items:center;justify-content:center;width:calc(var(--u)*4.4);height:calc(var(--u)*4.4);border-radius:50%;border:calc(var(--u)*.5) solid #9fd8ff;color:#9fd8ff;font-size:calc(var(--u)*3);font-weight:bold;font-style:italic;font-family:Georgia,serif;cursor:help;outline:none}
+#pinfo .tip{display:none;position:absolute;top:calc(100% + var(--u)*1.5);right:calc(var(--u)*-2);width:calc(var(--u)*70);z-index:20;background:var(--paper);color:var(--ink);border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*1.8) calc(var(--u)*2.2);font:normal calc(var(--u)*3.2)/1.45 "Courier New",ui-monospace,monospace;letter-spacing:0;text-align:left;box-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 var(--ink)}
+#pinfo:hover .tip,#pinfo:focus .tip{display:block}
 #onair{font-size:calc(var(--u)*3);font-weight:bold;letter-spacing:calc(var(--u)*.4);padding:0 calc(var(--u)*1.4);border:calc(var(--u)*.5) solid #6b5fbb;color:#6b5fbb;white-space:nowrap}
 #onair.live{color:#fff;background:#e11d48;border-color:#e11d48;box-shadow:0 0 calc(var(--u)*3) #e11d48;animation:air 1.6s ease-in-out infinite}
 @keyframes air{50%{box-shadow:0 0 calc(var(--u)*.8) #e11d48}}
@@ -176,7 +180,7 @@ button{font:inherit}
   </div>
   <div id="pside">
    <a id="pmake" href="/" target="_blank" rel="noopener"><span class="pm-ic">✦</span><span class="pm-tx"><b>Make one for your paper</b><small>Upload a PDF and your voice. About 10 minutes.</small></span><span class="pm-ar">→</span></a>
-   <div id="pnow" class="hidden"><div class="lbl"><span id="pnowt">🎙 PODCAST · FISHER RESEARCH CONVERSATIONS</span><span id="onair">ON AIR</span></div>
+   <div id="pnow" class="hidden"><div class="lbl"><span id="pnowt">🎙 PODCAST · FISHER RESEARCH CONVERSATIONS</span><span class="hr"><span id="pinfo" tabindex="0" aria-label="About the voices">i<span class="tip" id="pnowv" role="tooltip"></span></span><span id="onair">ON AIR</span></span></div>
     <div id="pprog"><i></i></div>
     <div id="stage">
      <div class="who" id="wguest"><div class="bub">···</div>
@@ -189,7 +193,7 @@ button{font:inherit}
     <button id="ppod" type="button">▶ Play the podcast · ~3 min</button>
     <div class="pctl"><span id="pstat"></span><button id="pstop" style="display:none">■ stop</button></div>
     <div id="pnowx">Click a panel on the poster to hear that section.</div>
-    <div id="pnowv" style="margin-top:calc(var(--u)*2);font-size:calc(var(--u)*3);opacity:.55"></div></div>
+    </div>
    <div id="pchat"><div class="hd"><span id="pchatt">Chat</span> <span class="ai">AI</span><small id="pchats"></small></div>
     <div id="plog"></div>
     <div id="psugg"></div>
