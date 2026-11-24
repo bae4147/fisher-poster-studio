@@ -124,10 +124,12 @@ const POSTER_SCHEMA = {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
     venue: S("Journal or outlet, year, volume/article info if present"),
-    introduction: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs"], properties: {
-      icon: ICON(), headline: S("Hook that introduces the topic, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: the research question" } } },
+    introduction: { type: "object", additionalProperties: false, required: ["role", "bio", "tags"], description: "ABOUT THE AUTHOR card: introduces the presenting author as a person, not the paper. Use only what the author wrote about themselves and author information printed in the paper; never invent titles, positions, history, awards or interests.", properties: {
+      role: S("The author's title and affiliation, e.g. 'Professor of Operations, Fisher College of Business'. Only as stated by the author or the paper's affiliation line; empty string if unknown. Max 14 words"),
+      bio: S("1-2 short sentences about who the author is and what they study, max 35 words, third person. Only from the author's own text or an author bio printed in the paper; if neither exists, one sentence saying they are an author of this paper at their stated affiliation"),
+      tags: { type: "array", items: S("Research area, 1-3 words"), description: "0-3 research areas the author named or the paper's author bio states; empty if none stated" } } },
     motivation: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs"], properties: {
-      icon: ICON(), headline: S("Why this matters, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: the problem or gap that made this study worth doing" } } },
+      icon: ICON(), headline: S("Why this matters, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: the problem or gap, and the question the paper asks" } } },
     narrative: { type: "object", additionalProperties: false, required: ["icon", "headline", "paragraphs", "model"], properties: {
       icon: ICON(), headline: S("The core idea, max 15 words"), paragraphs: { ...LINE, description: "Exactly 1 sentence: what we predicted and why" },
       model: { type: "object", additionalProperties: false, required: ["predictors", "mediators", "outcomes", "moderators"], description: "The paper's research model as a left-to-right diagram, using only constructs the paper names", properties: {
@@ -169,7 +171,8 @@ Accuracy rules:
 - If a hypothesis was not supported or a result did not replicate, say so plainly.
 
 Content rules:
-- The panels run in this order and must not repeat each other: introduction (topic and research question), motivation (why it matters and what was missing), narrative (theory and predictions), findings, methods, takeaway.
+- The panels run in this order and must not repeat each other: introduction (ABOUT THE AUTHOR: who the presenting author is), motivation (why the topic matters, what was missing, and the research question), narrative (theory and predictions), findings, methods, takeaway.
+- introduction is about the person, not the paper. Facts about the author come only from the author's own text and author information printed in the paper (affiliation line, author bio). Never guess or embellish a title, position, history, award or research interest.
 - The poster is visual: keep on-screen text very short and respect every word limit. The narration scripts carry the explanation, so the panels need only the gist.
 - methods.studies: 1-3 items, grouping extra studies. takeaway.tips: exactly 3. findings.points: exactly 3. findings.stats: 2-3 items, only numbers that appear in the paper.
 - narrative.model: draw the model the paper actually tests, using its constructs in plain words. If the study has no clear causal model (for example a simulation), show its main drivers and outcomes.
@@ -179,7 +182,7 @@ Content rules:
 
 Narration scripts (read aloud by an AI voice of the author; introduction and motivation 70-100 words, about 30-40 seconds; the other four 130-165 words, about 55-65 seconds):
 - First person, warm and conversational, the author speaking to a visitor at their poster ("we found", "in our second study").
-- scripts.introduction must start with "Hi, I'm ${spoken}, and thanks for stopping by." The other scripts continue the talk without greeting again.
+- scripts.introduction must start with "Hi, I'm ${spoken}, and thanks for stopping by." It introduces the author (role, what they study) using only the facts allowed for the introduction panel, then leads briefly into the paper's topic. If little is known about the author, keep that part to one sentence. The other scripts continue the talk without greeting again.
 - Write every number as words a speaker would say (for example "five hundred twenty-four", "point five nine").
 - No symbols, abbreviations, parentheses, citations, or statistics notation. Do not invent personal anecdotes.
 
@@ -195,11 +198,11 @@ Podcast (about 3 minutes, 420-480 words in total):
   - Let the topic flow by association (the idea, how it was studied, what was found, what to do with it), without announcing sections or saying "first", "second", "great question", or "let's move on".
   - The guest speaks for the team ("we", "our team"), may mention co-authors by name, and explains with simple examples.
 - The host's everyday examples must be framed as illustrations, not as facts from the study; every fact about the study must come from the paper.
-- Tag each turn with the poster panel it is mainly about (introduction, motivation, narrative, findings, methods, takeaway), or leave it empty for greetings, short reactions and the goodbye.
+- Tag each turn with the poster panel it is mainly about (introduction = the author as a person, motivation, narrative, findings, methods, takeaway), or leave it empty for greetings, short reactions and the goodbye.
 - End with a light, natural wrap-up and the host thanking the guest. Same rules as narration: numbers written as spoken words, no symbols, abbreviations, stage directions or sound tags.
 
 Author's own notes:
-- The author may supply their own text for the introduction or motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
+- The author may supply their own text about themselves (for the introduction / about-the-author panel) or for the motivation panel. When they do, build that panel and its script from their text: keep their meaning and as much of their wording as fits, trimming only for length and clarity. Personal reasons or context the author wrote may be used, but add nothing personal beyond what they wrote.
 - Facts about the study in their notes must still agree with the paper; if they conflict, follow the paper.
 - When a panel has no author text, draft it from the paper.`; };
 
@@ -213,7 +216,7 @@ async function uploadPdf(env, bytes, filename) {
 }
 function notesText(notes) {
   const parts = [];
-  if (notes.introduction) parts.push("The author's own text for the INTRODUCTION panel:\n<<<\n" + notes.introduction + "\n>>>");
+  if (notes.introduction) parts.push("The author's own text ABOUT THEMSELVES, for the ABOUT THE AUTHOR (introduction) panel:\n<<<\n" + notes.introduction + "\n>>>");
   if (notes.motivation) parts.push("The author's own text for the MOTIVATION panel:\n<<<\n" + notes.motivation + "\n>>>");
   return parts.length ? "\n\n" + parts.join("\n\n") : "";
 }
@@ -248,7 +251,8 @@ function cleanPoster(j, hostKey) {
   if (bars.length < 2) bars = [];
   const p = {
     title: St(j.title, 300), authors: A(j.authors, 20).map(x => St(x, 80)).filter(Boolean), venue: St(j.venue, 200),
-    introduction: text(j.introduction, 2), motivation: text(j.motivation, 2),
+    introduction: { role: St(j.introduction?.role, 140), bio: St(j.introduction?.bio, 400), tags: A(j.introduction?.tags, 3).map(x => St(x, 40)).filter(Boolean) },
+    motivation: text(j.motivation, 2),
     narrative: { ...text(j.narrative, 3), model: { predictors: nodes(m.predictors, 3), mediators: nodes(m.mediators, 2), outcomes: nodes(m.outcomes, 3), moderators: nodes(m.moderators, 2) } },
     findings: { icon: Ic(j.findings?.icon), headline: St(j.findings?.headline, 240),
       points: A(j.findings?.points, 4).map(x => typeof x === "string" ? { icon: "", text: St(x, 300) } : { icon: Ic(x?.icon), text: St(x?.text, 300) }).filter(x => x.text),
@@ -260,7 +264,7 @@ function cleanPoster(j, hostKey) {
     podcast: { host: HOSTS[hostKey].name, hostKey, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
-  if (!p.title || !p.introduction.headline || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
+  if (!p.title || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
   return p;
 }
 

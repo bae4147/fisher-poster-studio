@@ -51,6 +51,16 @@ button{font:inherit}
 .zone .lead .bigic{font-size:calc(var(--u)*13);line-height:1;flex:0 0 auto;filter:drop-shadow(calc(var(--u)*.8) calc(var(--u)*.8) 0 #14242a33)}
 .zone .lead div{min-width:0}
 .zone .lead p:last-child{margin-bottom:0}
+.zone.author{background:#fff6d6}
+.acard{display:flex;gap:calc(var(--u)*4);align-items:center}
+.acard .av{flex:0 0 auto;background:#9fd8ff;border:calc(var(--u)*.8) solid var(--ink);padding:calc(var(--u)*1.5);box-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 var(--ink)}
+.acard .av svg{display:block;width:calc(var(--u)*26);height:calc(var(--u)*26);image-rendering:pixelated}
+.acard .ai{min-width:0}
+.acard .an{font-size:calc(var(--u)*6);font-weight:bold;line-height:1.15}
+.acard .ar{font-size:calc(var(--u)*3.8);color:var(--green);font-weight:bold;margin-top:calc(var(--u)*.8)}
+.acard .ab{margin:calc(var(--u)*1.6) 0 0!important}
+.atags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*1.5);margin-top:calc(var(--u)*2)}
+.atags span{font-size:calc(var(--u)*3.2);background:var(--ink);color:var(--paper);padding:calc(var(--u)*.4) calc(var(--u)*1.8)}
 .model{display:flex;align-items:stretch;justify-content:center;gap:calc(var(--u)*1.5);margin-top:calc(var(--u)*2.5);position:relative;padding-top:calc(var(--u)*1)}
 .model .col{display:flex;flex-direction:column;justify-content:center;gap:calc(var(--u)*1.5);flex:1 1 0;min-width:0}
 .model .node{border:calc(var(--u)*.6) solid var(--ink);background:var(--paper);padding:calc(var(--u)*1.6) calc(var(--u)*1.5);text-align:center;font-size:calc(var(--u)*3.6);line-height:1.25;font-weight:bold}
@@ -247,7 +257,19 @@ function renderPoster(v){
   const zone=(k,wide)=>zoneEl(k,N(),SEC_TITLES[k],wide);
   /* headline + sentence, with a large icon beside it */
   const lead=(z,sec,big)=>{const box=el("div",big&&sec.icon?"lead":null);if(big&&sec.icon)box.append(el("span","bigic",sec.icon));const t=el("div");t.append(el("p","big",sec.headline));(sec.paragraphs||[]).forEach(x=>t.append(el("p",null,x)));box.append(t);z.append(box);};
-  ["introduction","motivation"].forEach(k=>{const sec=p[k];if(!sec||!sec.headline||!SECTIONS.includes(k))return;const z=zone(k);lead(z,sec,true);m.append(z);});
+  /* About the author (new posters) or the older Introduction panel */
+  const I=p.introduction,authorCard=!!(I&&!I.headline&&(I.role||I.bio));
+  SEC_TITLES.introduction=authorCard?"About the author":"Introduction";
+  if(I&&SECTIONS.includes("introduction")){
+    if(authorCard){
+      const z=zone("introduction",true);z.classList.add("author");const card=el("div","acard");
+      const av=el("div","av");av.innerHTML=$("wguest").querySelector("svg").outerHTML;card.append(av);
+      const info=el("div","ai");info.append(el("div","an",v.displayName));if(I.role)info.append(el("div","ar",I.role));if(I.bio)info.append(el("p","ab",I.bio));
+      if(I.tags&&I.tags.length){const tg=el("div","atags");I.tags.forEach(t=>tg.append(el("span",null,t)));info.append(tg);}
+      card.append(info);z.append(card);m.append(z);
+    } else if(I.headline){const z=zone("introduction");lead(z,I,true);m.append(z);}
+  }
+  if(p.motivation&&p.motivation.headline&&SECTIONS.includes("motivation")){const z=zone("motivation",authorCard);lead(z,p.motivation,true);m.append(z);}
   /* research narrative + model diagram */
   const md=p.narrative&&p.narrative.model,hasModel=!!(md&&md.predictors&&md.predictors.length&&md.outcomes&&md.outcomes.length);
   const bars=(p.findings.chart&&p.findings.chart.bars)||[],wideMid=hasModel||bars.length>=2;
