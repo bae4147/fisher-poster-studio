@@ -108,6 +108,10 @@ body.editmode .zone{cursor:default}
 body.editmode .edit-item{position:relative}
 .xdel{position:absolute;top:calc(var(--u)*-1.6);right:calc(var(--u)*-1.6);width:calc(var(--u)*4.6);height:calc(var(--u)*4.6);border-radius:50%;border:0;background:#dc2626;color:#fff;font:bold calc(var(--u)*3.4)/1 sans-serif;cursor:pointer;display:none;z-index:3;padding:0}
 body.editmode .edit-item:hover>.xdel{display:block}
+.xmv{position:absolute;top:calc(var(--u)*-1.6);right:calc(var(--u)*3.6);display:none;gap:calc(var(--u)*.6);z-index:3}
+body.editmode .edit-item:hover>.xmv{display:flex}
+.xmv button{width:calc(var(--u)*4.6);height:calc(var(--u)*4.6);border-radius:50%;border:0;background:#2563eb;color:#fff;font:calc(var(--u)*2.6)/1 sans-serif;cursor:pointer;padding:0}
+.xmv button:hover{background:#1d4ed8}
 .xadd{font:bold calc(var(--u)*3)/1 "Courier New",monospace;color:#2563eb;background:#eff6ff;border:calc(var(--u)*.4) dashed #2563eb;padding:calc(var(--u)*1) calc(var(--u)*2);cursor:pointer;margin-top:calc(var(--u)*1.2);align-self:flex-start}
 .xadd:hover{background:#dbeafe}
 .flow .xadd{align-self:center;margin-top:0}
@@ -286,7 +290,13 @@ const EDIT=new URLSearchParams(location.search).get("edit")==="1";
 let FIGSRC={};   // edit mode: panel -> image data URL sent by the studio
 const ICONS=["🏥","🩺","💊","❤️","🧠","👥","🤝","💬","🗣️","📈","📉","📊","🔁","⚙️","🔧","🧪","🔬","📋","⏱️","📅","🎯","💡","⚖️","🧭","🏭","💼","🏢","🌱","🔍","❓","⚠️","✅","🛡️","💰","🧮","🖥️","🤖","📚","🎓","🏠","🧩","🔗","🙏","😟","😊","🌍","🚀","⭐"];   // same list the server accepts
 /* edit mode: × on list items and "+ Add" at the end of lists; the studio applies the change and re-renders */
-const DEL=(node,list,i)=>{if(EDIT&&node){node.classList.add("edit-item");const b=el("button","xdel","×");b.type="button";b.title="Delete";b.contentEditable="false";b.addEventListener("click",e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:"del",list,index:i},location.origin);});node.append(b);}return node;};
+const VERTICAL=/^(findings\.points|narrative\.model\.(predictors|mediators|outcomes))$/;
+const DEL=(node,list,i)=>{if(EDIT&&node){node.classList.add("edit-item");
+  const op=(o,extra)=>e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:o,list,index:i,...extra},location.origin);};
+  const b=el("button","xdel","×");b.type="button";b.title="Delete";b.contentEditable="false";b.addEventListener("click",op("del"));node.append(b);
+  const v=VERTICAL.test(list),mv=el("span","xmv");mv.contentEditable="false";
+  [[-1,v?"▲":"◀",v?"Move up":"Move left"],[1,v?"▼":"▶",v?"Move down":"Move right"]].forEach(([d,g,t])=>{const x=el("button",null,g);x.type="button";x.title=t;x.addEventListener("click",op("move",{dir:d}));mv.append(x);});
+  node.append(mv);}return node;};
 const ADD=(container,list,label)=>{if(EDIT&&container){const b=el("button","xadd","+ "+label);b.type="button";b.addEventListener("click",e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:"add",list},location.origin);});container.append(b);}return container;};
 const IC=(node,path)=>{if(EDIT&&node){node.dataset.icon=path;node.title="Change icon";}return node;};
 const E=(node,path)=>{if(EDIT&&node){node.dataset.path=path;node.contentEditable="true";node.spellcheck=true;}return node;};
@@ -536,7 +546,7 @@ function bindEdit(root){
   root.querySelectorAll("[data-path]").forEach(n=>{
     n.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();n.blur();}});
     n.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");document.execCommand("insertText",false,t.replace(/\s+/g," "));});
-    n.addEventListener("input",()=>{const c=n.cloneNode(true);c.querySelectorAll(".xdel,.xadd").forEach(x=>x.remove());parent.postMessage({type:"fps-edit",path:n.dataset.path,value:c.textContent.replace(/\s+/g," ").trim()},location.origin);});
+    n.addEventListener("input",()=>{const c=n.cloneNode(true);c.querySelectorAll(".xdel,.xadd,.xmv").forEach(x=>x.remove());parent.postMessage({type:"fps-edit",path:n.dataset.path,value:c.textContent.replace(/\s+/g," ").trim()},location.origin);});
   });
 }
 if(EDIT){

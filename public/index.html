@@ -203,6 +203,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
      <li><b>Change an icon:</b> click it and pick another.</li>
      <li><b>Delete an item:</b> hover over it and click the red <b>×</b>.</li>
      <li><b>Add an item:</b> click a blue <b>+ Add</b> button (findings, numbers, steps, tips, tags, model boxes).</li>
+     <li><b>Move an item:</b> hover over it and click the blue arrows to move it earlier or later.</li>
      <li><b>Show a figure from your paper:</b> use the <b>Add a figure</b> tab.</li>
     </ul>
     <div class="notice" style="margin:4px 0 0;font-size:13.5px">The narration and podcast don't update by themselves. After you change content, check the <b>Scripts</b> tab so your AI voice says the same thing as the poster.</div>
@@ -503,6 +504,7 @@ function itemOp(d){
   if(!(list in ITEM_NEW))return;
   let arr=getPath(ED.poster,list);if(!Array.isArray(arr)){setPath(ED.poster,list,[]);arr=getPath(ED.poster,list);}
   if(d.op==="del"&&arr[d.index]!==undefined)arr.splice(d.index,1);
+  if(d.op==="move"){const j=d.index+(d.dir<0?-1:1);if(arr[d.index]===undefined||j<0||j>=arr.length)return;[arr[d.index],arr[j]]=[arr[j],arr[d.index]];}
   if(d.op==="add"){if(arr.length>=ITEM_MAX[list])return;arr.push(clone(ITEM_NEW[list]));}
   sendPreview();   // re-render in place; the preview keeps its scroll position
 }
