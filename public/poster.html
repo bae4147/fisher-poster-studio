@@ -105,6 +105,11 @@ body.editmode [data-path]{outline:calc(var(--u)*.4) dashed transparent;outline-o
 body.editmode [data-path]:hover{outline-color:#2563eb88}
 body.editmode [data-path]:focus{outline:calc(var(--u)*.5) solid #2563eb;background:#fff}
 body.editmode .zone{cursor:default}
+body.editmode [data-icon]{cursor:pointer;border-radius:4px;outline:calc(var(--u)*.4) dashed transparent}
+body.editmode [data-icon]:hover{outline-color:#2563eb88;background:#ffffff99}
+.icpick{position:fixed;z-index:100;width:320px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:8px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 10px 30px #0004}
+.icpick button{font-size:22px;line-height:1;padding:5px 0;background:none;border:0;border-radius:6px;cursor:pointer}
+.icpick button:hover{background:#eef2ff}
 body.editmode #vwrap{width:100vw;height:100vh}
 body.editmode #poster{grid-template-columns:minmax(0,1fr)}
 body.editmode #pside{display:none!important}
@@ -271,6 +276,8 @@ function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className
 /* ---- studio edit mode: /p/edit?edit=1 inside the studio's review screen ---- */
 const EDIT=new URLSearchParams(location.search).get("edit")==="1";
 let FIGSRC={};   // edit mode: panel -> image data URL sent by the studio
+const ICONS=["🏥","🩺","💊","❤️","🧠","👥","🤝","💬","🗣️","📈","📉","📊","🔁","⚙️","🔧","🧪","🔬","📋","⏱️","📅","🎯","💡","⚖️","🧭","🏭","💼","🏢","🌱","🔍","❓","⚠️","✅","🛡️","💰","🧮","🖥️","🤖","📚","🎓","🏠","🧩","🔗","🙏","😟","😊","🌍","🚀","⭐"];   // same list the server accepts
+const IC=(node,path)=>{if(EDIT&&node){node.dataset.icon=path;node.title="Change icon";}return node;};
 const E=(node,path)=>{if(EDIT&&node){node.dataset.path=path;node.contentEditable="true";node.spellcheck=true;}return node;};
 function figureEl(p,panel,slug){
   const f=p.figures&&p.figures[panel];if(!f)return null;
@@ -289,7 +296,7 @@ function renderPoster(v){
   let num=0;const N=()=>String(++num);
   const zone=(k,wide)=>zoneEl(k,N(),SEC_TITLES[k],wide);
   /* headline + sentence, with a large icon beside it */
-  const lead=(z,sec,big,k)=>{const box=el("div",big&&sec.icon?"lead":null);if(big&&sec.icon)box.append(el("span","bigic",sec.icon));const t=el("div");t.append(E(el("p","big",sec.headline),k+".headline"));(sec.paragraphs||[]).forEach((x,i)=>t.append(E(el("p",null,x),k+".paragraphs."+i)));box.append(t);z.append(box);};
+  const lead=(z,sec,big,k)=>{const box=el("div",big&&sec.icon?"lead":null);if(big&&sec.icon)box.append(IC(el("span","bigic",sec.icon),k+".icon"));const t=el("div");t.append(E(el("p","big",sec.headline),k+".headline"));(sec.paragraphs||[]).forEach((x,i)=>t.append(E(el("p",null,x),k+".paragraphs."+i)));box.append(t);z.append(box);};
   /* About the author (new posters) or the older Introduction panel */
   const I=p.introduction,authorCard=!!(I&&!I.headline&&(I.role||I.bio));
   SEC_TITLES.introduction=authorCard?"About the author":"Introduction";
@@ -324,7 +331,7 @@ function renderPoster(v){
   /* findings: icon points, stats, bar chart */
   const F=p.findings;
   const z2=zone("findings",wideMid);z2.append(E(el("p","big",F.headline),"findings.headline"));
-  const ul=el("ul","ipts");(F.points||[]).forEach((t,i)=>{const li=el("li");if(typeof t==="string"){li.append(el("span","ic","•"),E(el("span",null,t),"findings.points."+i));}else{li.append(el("span","ic",t.icon||"•"),E(el("span",null,t.text),"findings.points."+i+".text"));}ul.append(li);});z2.append(ul);
+  const ul=el("ul","ipts");(F.points||[]).forEach((t,i)=>{const li=el("li");if(typeof t==="string"){li.append(el("span","ic","•"),E(el("span",null,t),"findings.points."+i));}else{li.append(IC(el("span","ic",t.icon||"•"),"findings.points."+i+".icon"),E(el("span",null,t.text),"findings.points."+i+".text"));}ul.append(li);});z2.append(ul);
   if(F.stats&&F.stats.length){const sg=el("div","stats");F.stats.forEach((s,i)=>{const d=el("div","stat");d.append(E(el("b",null,s.value),"findings.stats."+i+".value"),E(el("span",null,s.label),"findings.stats."+i+".label"));sg.append(d);});z2.append(sg);}
   if(bars.length>=2){const ch=el("div","chart");if(F.chart.title)ch.append(E(el("div","ct",F.chart.title),"findings.chart.title"));const mx=Math.max(...bars.map(b=>b.value))||1;
     bars.forEach((b,bi)=>{const r=el("div","row");r.append(E(el("span","lab",b.label),"findings.chart.bars."+bi+".label"));const tr=el("div","track");const br=el("div","bar",b.shown||String(b.value));br.style.width=Math.max(4,100*b.value/mx)+"%";tr.append(br);r.append(tr);ch.append(r);});z2.append(ch);}
@@ -332,11 +339,11 @@ function renderPoster(v){
   m.append(z2);
   /* methods: step flow */
   const M=p.methods,z3=zone("methods",true),fl=el("div","flow");
-  (M.studies||[]).forEach((s,i)=>{if(i)fl.append(el("div","arr","→"));const d=el("div","st");if(s.icon)d.append(el("span","ic",s.icon));d.append(E(el("b",null,s.name),"methods.studies."+i+".name"),E(el("span",null,s.detail),"methods.studies."+i+".detail"));if(s.tag){d.append(el("br"));d.append(E(el("span","k",s.tag),"methods.studies."+i+".tag"));}fl.append(d);});
+  (M.studies||[]).forEach((s,i)=>{if(i)fl.append(el("div","arr","→"));const d=el("div","st");if(s.icon||EDIT)d.append(IC(el("span","ic",s.icon||"＋"),"methods.studies."+i+".icon"));d.append(E(el("b",null,s.name),"methods.studies."+i+".name"),E(el("span",null,s.detail),"methods.studies."+i+".detail"));if(s.tag){d.append(el("br"));d.append(E(el("span","k",s.tag),"methods.studies."+i+".tag"));}fl.append(d);});
   z3.append(fl);if(figM)z3.append(figM);if(M.note){const n=E(el("p",null,M.note),"methods.note");n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
   /* takeaway: icon tips */
   const T=p.takeaway,z4=zone("takeaway",true);z4.append(E(el("p","big",T.headline),"takeaway.headline"));const dd=el("div","do");
-  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon)d.append(el("span","ic",t.icon));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(d);});z4.append(dd);m.append(z4);
+  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon||EDIT)d.append(IC(el("span","ic",t.icon||"＋"),"takeaway.tips."+i+".icon"));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(d);});z4.append(dd);m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
   if(EDIT){bindEdit(m);return;}
   loadMore(v);
@@ -505,7 +512,15 @@ $("pform").addEventListener("submit",e=>{e.preventDefault();ask($("pin").value);
 
 
 /* edit mode: the studio sends the draft by postMessage; text edits are sent back */
+function iconPicker(target){
+  document.querySelectorAll(".icpick").forEach(n=>n.remove());
+  const box=el("div","icpick");ICONS.forEach(ic=>{const b=el("button",null,ic);b.type="button";b.onclick=e=>{e.stopPropagation();target.textContent=ic;box.remove();
+    parent.postMessage({type:"fps-edit",path:target.dataset.icon,value:ic},location.origin);};box.append(b);});
+  const r=target.getBoundingClientRect();box.style.left=Math.min(r.left,innerWidth-330)+"px";box.style.top=(r.bottom+6>innerHeight-220?Math.max(4,r.top-226):r.bottom+6)+"px";
+  document.body.append(box);setTimeout(()=>document.addEventListener("click",function off(e){if(!box.contains(e.target)){box.remove();document.removeEventListener("click",off);}}),0);
+}
 function bindEdit(root){
+  root.querySelectorAll("[data-icon]").forEach(n=>n.addEventListener("click",e=>{e.stopPropagation();iconPicker(n);}));
   root.querySelectorAll("[data-path]").forEach(n=>{
     n.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();n.blur();}});
     n.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");document.execCommand("insertText",false,t.replace(/\s+/g," "));});
