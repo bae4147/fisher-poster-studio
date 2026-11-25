@@ -173,12 +173,12 @@ Accuracy rules:
 - Copy numbers exactly as the paper reports them. Do not round, invent, or infer results, samples, or quotes.
 - If a hypothesis was not supported or a result did not replicate, say so plainly.
 
-Plain-language rules (apply to every panel, the model diagram, the narration scripts, the podcast and suggested questions):
+Plain-language rules (apply to all written text on the poster, the model diagram labels, the narration scripts, the podcast and suggested questions; these matter most for the sentences and scripts):
 - Write for a curious visitor with no research training, at about a high-school reading level. Short sentences, everyday words.
 - Do not use statistical or methods jargon such as "conditional indirect effect", "moderated mediation", "mediation", "moderation", "interaction effect", "main effect", "simple slope", "coefficient", "beta", "variance", "standard deviation", "statistically significant", "p-value", "confidence interval", "construct", "operationalized", "latent", "endogeneity", "multilevel", "within-person". Say what the result means in everyday terms instead, for example "this only happened for leaders who..." rather than "a conditional indirect effect", or "the effect was stronger when..." rather than "a positive interaction".
 - Use everyday names for the paper's variables (e.g. "how much people trust their boss" rather than "supervisor-focused trust") unless the paper's term is already common.
 - If a technical term truly cannot be avoided, explain it in plain words in the same sentence.
-- Numbers: give only the few that help a visitor understand (sample sizes, percentages, simple comparisons), described in plain words; avoid regression coefficients and test statistics.
+- Numbers: the poster's number elements (findings.stats and findings.chart) may show the paper's key numbers exactly as reported, each with a short plain-language label saying what it means. In sentences, narration and the podcast, describe results in plain words and only mention numbers that help (sample sizes, percentages, simple comparisons), never test statistics or coefficients.
 
 Content rules:
 - The panels run in this order and must not repeat each other: introduction (ABOUT THE AUTHOR: who the presenting author is), motivation (why the topic matters, what was missing, and the research question), narrative (theory and predictions), findings, methods, takeaway.
