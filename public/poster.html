@@ -98,6 +98,7 @@ button{font:inherit}
 .mcard b{font-size:15px;line-height:1.35}
 .mcard span{font-size:13px;opacity:.7}
 .mcard.cur{border-color:#6bffb0;background:#163327;pointer-events:none}
+#pmain .zone p,#pmain .zone .ab,#pmain .st span,#pmain .do span,#pmain .ipts span,#pmain figcaption{white-space:pre-line}
 figure.pfig{margin:calc(var(--u)*2.5) 0 0;background:#fff;border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*1.5)}
 figure.pfig img{display:block;max-width:100%;max-height:calc(var(--u)*110);margin:0 auto}
 figure.pfig figcaption{font-size:calc(var(--u)*3.1);margin-top:calc(var(--u)*1.2);text-align:center;opacity:.8}
@@ -541,12 +542,19 @@ function iconPicker(target){
   const r=target.getBoundingClientRect();box.style.left=Math.min(r.left,innerWidth-330)+"px";box.style.top=(r.bottom+6>innerHeight-220?Math.max(4,r.top-226):r.bottom+6)+"px";
   document.body.append(box);setTimeout(()=>document.addEventListener("click",function off(e){if(!box.contains(e.target)){box.remove();document.removeEventListener("click",off);}}),0);
 }
+/* fields where Enter adds a line break; elsewhere Enter finishes editing */
+const MULTILINE=/(\.paragraphs\.\d+|introduction\.bio|methods\.note|methods\.studies\.\d+\.detail|takeaway\.tips\.\d+\.text|findings\.points\.\d+(\.text)?|figures\.\w+\.caption)$/;
+function editText(n){   // text of an editable node: <br> becomes a line break; edit buttons are skipped
+  let out="";const walk=x=>{x.childNodes.forEach(c=>{if(c.nodeType===3)out+=c.nodeValue;else if(c.nodeName==="BR")out+="\n";else if(c.nodeType===1&&!c.matches(".xdel,.xadd,.xmv")){if(/^(DIV|P)$/.test(c.nodeName)&&out&&!out.endsWith("\n"))out+="\n";walk(c);}});};
+  walk(n);return out.split("\n").map(l=>l.replace(/[ \t\u00a0]+/g," ").trim()).join("\n").replace(/\n{3,}/g,"\n\n").trim();
+}
 function bindEdit(root){
   root.querySelectorAll("[data-icon]").forEach(n=>n.addEventListener("click",e=>{e.stopPropagation();iconPicker(n);}));
   root.querySelectorAll("[data-path]").forEach(n=>{
-    n.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();n.blur();}});
-    n.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");document.execCommand("insertText",false,t.replace(/\s+/g," "));});
-    n.addEventListener("input",()=>{const c=n.cloneNode(true);c.querySelectorAll(".xdel,.xadd,.xmv").forEach(x=>x.remove());parent.postMessage({type:"fps-edit",path:n.dataset.path,value:c.textContent.replace(/\s+/g," ").trim()},location.origin);});
+    const multi=MULTILINE.test(n.dataset.path);
+    n.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();if(multi&&!e.isComposing)document.execCommand("insertLineBreak");else if(!e.isComposing)n.blur();});
+    n.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");document.execCommand("insertText",false,multi?t.replace(/\r/g,""):t.replace(/\s+/g," "));});
+    n.addEventListener("input",()=>parent.postMessage({type:"fps-edit",path:n.dataset.path,value:multi?editText(n):editText(n).replace(/\s+/g," ")},location.origin));
   });
 }
 if(EDIT){
