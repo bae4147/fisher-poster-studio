@@ -281,7 +281,7 @@ async function openViewer(slug){
   catch(e){$("vmsg").textContent="Could not load this poster. Please try again.";return;}
   SECTIONS=Array.isArray(v.audio)&&v.audio.length?ALL_SECTIONS.filter(k=>v.audio.includes(k)):SECTIONS;
   V={slug,data:v,urls:{},chat:[],chatInit:false};
-  SECTIONS.forEach(k=>{V.urls[k]="/audio/"+slug+"/"+k+".mp3";});
+  SECTIONS.forEach(k=>{V.urls[k]="/audio/"+slug+"/"+k+".mp3"+(v.audioVer&&v.audioVer[k]?"?v="+v.audioVer[k]:"");});
   document.title=v.poster.title+" · Interactive poster";
   renderPoster(v);$("vmsg").classList.add("hidden");$("poster").classList.remove("hidden");resize();
 }

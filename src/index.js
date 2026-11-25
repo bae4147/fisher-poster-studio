@@ -429,7 +429,7 @@ async function api(request, env, url) {
     const v = await env.POSTERS.get("poster:" + m[1], "json");
     if (!v) return err(404, "Poster not found.", "not_found");
     const { brief, ...pub } = v.poster;
-    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, podcast: v.podcast || 0, avatar: !!v.avatar, poster: pub });
+    return json({ slug: m[1], displayName: v.displayName, spokenName: v.spokenName, createdAt: v.createdAt, audio: v.audio, audioVer: v.audioVer || {}, podcast: v.podcast || 0, avatar: !!v.avatar, hasVoice: !!v.voiceId, poster: pub });
   }
 
   if (p === "/api/chat" && method === "POST") {
@@ -515,6 +515,28 @@ async function api(request, env, url) {
     return json({ items });
   }
 
+  /* re-record one panel's narration of a finished poster, with the author's kept clone (or a voice ID given with the admin code) */
+  if (p === "/api/rerecord" && method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const slug = String(b.slug || ""), section = String(b.section || ""), text = String(b.text || "").trim();
+    if (!/^[a-z0-9]{6,20}$/.test(slug) || !SECTIONS.includes(section)) return err(400, "Bad request.", "bad_request");
+    if (text.length < 20 || text.length > MAX_SCRIPT) return err(400, "The script is empty or too long.", "bad_request");
+    const v = await env.POSTERS.get("poster:" + slug, "json");
+    if (!v) return err(404, "Poster not found.", "not_found");
+    if (!(await canEdit(slug))) return err(403, "Only the browser that made this poster, or the admin code, can edit it.", "not_owner");
+    const isAdmin = env.ADMIN_CODE && (request.headers.get("x-admin-code") || "") === env.ADMIN_CODE;
+    const voice = v.voiceId || (isAdmin && /^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") ? b.voice_id : "");
+    if (!voice) return err(400, "This poster doesn't have a saved voice. Enter the ElevenLabs voice ID of the author's clone (admin).", "no_voice");
+    return slowJson(async () => {
+      const audio = await tts(env, voice, text);
+      await env.POSTERS.put(`audio:${slug}:${section}`, audio, { metadata: { bytes: audio.byteLength } });
+      v.poster.scripts[section] = text; v.audioVer = { ...(v.audioVer || {}), [section]: Date.now() };
+      if (!v.voiceId && isAdmin) v.voiceId = b.voice_id;
+      await env.POSTERS.put("poster:" + slug, JSON.stringify(v), { metadata: { title: v.poster.title.slice(0, 200), displayName: v.displayName, createdAt: v.createdAt } });
+      return { ok: true, ver: v.audioVer[section] };
+    });
+  }
+
   /* a figure the author cropped from the paper, stored with the poster */
   if (p === "/api/figure" && method === "POST") {
     const voice_id = url.searchParams.get("voice_id") || "", slug = url.searchParams.get("slug") || "", panel = url.searchParams.get("panel") || "";
@@ -538,6 +560,9 @@ async function api(request, env, url) {
     return slowJson(async () => {
       const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
       const voice_id = await cloneVoice(env, bytes, (name || "Fisher presenter") + " (Fisher poster)", type);
+      /* warm-up: the first generation from a brand-new clone is occasionally off (e.g. a different voice), so spend it on a throwaway line */
+      await new Promise(r => setTimeout(r, 1500));
+      try { await tts(env, voice_id, "Hello, and thanks for stopping by."); } catch {}
       return { voice_id, voice_token: await hmac(env, "voice:" + voice_id), slug: slugMake() };
     });
   }
@@ -627,7 +652,7 @@ async function api(request, env, url) {
     for (const k of Object.keys(poster.figures)) if (!(await env.POSTERS.get(`figure:${slug}:${k}`, "stream"))) delete poster.figures[k];
     const createdAt = Date.now();
     const avatar = !!(await env.POSTERS.get(`avatar:${slug}`));
-    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN, avatar }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
+    await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN, avatar, ...(keepClones(env) ? { voiceId: String(b.voice_id || "") } : {}) }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
     /* Every build gets its own permanent link; earlier posters are kept. */
     const ck = ownerKey(ownerId), list = ownedSlugs(await env.POSTERS.get(ck));
     await env.POSTERS.put(ck, JSON.stringify([slug, ...list.filter(x => x !== slug)].slice(0, 200)));

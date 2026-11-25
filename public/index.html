@@ -480,7 +480,26 @@ function renderScripts(){
   const add=(label,val,set,cls)=>{const d=document.createElement("div");d.className="scr"+(cls?" "+cls:"");const h=document.createElement("div");h.className="h";h.textContent=label;const t=document.createElement("textarea");t.value=val||"";if(ED.existing)t.readOnly=true;else t.addEventListener("input",()=>set(t.value));d.append(h,t);box.append(d);};
   const h3=t=>{const x=document.createElement("h3");x.textContent=t;x.style.cssText="font-size:14px;margin:6px 0 10px";box.append(x);};
   h3("Panel narration");
-  PANELS.forEach(k=>add(PANEL_NAMES[k],p.scripts[k],v=>{p.scripts[k]=v;}));
+  PANELS.forEach(k=>{
+    if(!ED.existing){add(PANEL_NAMES[k],p.scripts[k],v=>{p.scripts[k]=v;});return;}
+    /* finished poster: edit a panel's script and re-record just that panel with the author's voice */
+    const d=document.createElement("div");d.className="scr";const h=document.createElement("div");h.className="h";h.textContent=PANEL_NAMES[k];
+    const t=document.createElement("textarea");t.value=p.scripts[k]||"";
+    const row=document.createElement("div");row.className="edrow";row.style.marginTop="6px";
+    const b=document.createElement("button");b.type="button";b.className="btn sec small";b.textContent="Re-record this panel";
+    const m=document.createElement("span");m.className="edmsg";m.style.margin="0";
+    b.onclick=async()=>{
+      const text=t.value.trim();if(text.length<20){m.className="edmsg bad";m.textContent="The script is too short.";return;}
+      let voice_id="";
+      if(!ED.hasVoice){voice_id=(prompt("This poster has no saved voice. Enter the ElevenLabs voice ID of the author's clone (needs the admin code):")||"").trim();if(!voice_id)return;}
+      b.disabled=true;m.className="edmsg";m.textContent="Recording… (uses ElevenLabs credits for this panel only)";
+      try{await edSend("/api/rerecord",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug:ED.existing,section:k,text,voice_id})});
+        p.scripts[k]=text;ED.hasVoice=true;m.className="edmsg ok";m.textContent="Re-recorded. It plays on the poster now.";}
+      catch(e){m.className="edmsg bad";m.textContent=(e&&e.message)||"Could not re-record.";}
+      b.disabled=false;
+    };
+    row.append(b,m);d.append(h,t,row);box.append(d);
+  });
   const L=(p.podcast&&p.podcast.lines)||[];
   if(L.length){h3("Podcast");L.forEach((l,i)=>add((l.speaker==="host"?(p.podcast.host||"Host"):ED.spoken)+" · "+(i+1),l.text,v=>{l.text=v;},"pod"));}
 }
@@ -565,11 +584,11 @@ $("figadd").onclick=async()=>{
 /* open / close */
 function reviewAndEdit(poster,spoken,opts={}){
   ED.poster=clone(poster);ED.poster.figures=ED.poster.figures||{};ED.figs={};ED.history=[];ED.spoken=spoken;ED.pdf=null;
-  ED.existing=opts.existing||null;ED.displayName=opts.displayName||"";
+  ED.existing=opts.existing||null;ED.displayName=opts.displayName||"";ED.hasVoice=!!opts.hasVoice;
   if(ED.existing)for(const k of Object.keys(ED.poster.figures))ED.figs[k]={url:"/figure/"+ED.existing+"/"+k+".png"};   // figures already saved
   renderFigList();
   $("figpdfbox").classList.toggle("hidden",!!paperFile||!ED.existing);
-  $("scrnote").textContent=ED.existing?"What the recorded voice says. Recordings are not redone when you edit a finished poster, so these can't be changed here.":"What your AI voice will say. Edit it so it matches the poster.";
+  $("scrnote").textContent=ED.existing?"What the recorded voice says. To change a panel's narration, edit its script and click Re-record (uses ElevenLabs credits for that panel only). The podcast can't be re-recorded here.":"What your AI voice will say. Edit it so it matches the poster.";
   $("edok").textContent=ED.existing?"Save changes":"Looks good: record voice and save";
   document.querySelector("#editor .edbar .muted").textContent=ED.existing?"Editing a finished poster. Narration and podcast audio stay as recorded.":"Nothing is recorded yet. Recording starts when you click the button on the right.";
   document.querySelectorAll(".edtabs button").forEach((x,i)=>x.classList.toggle("on",i===0));document.querySelectorAll(".edsec").forEach((x,i)=>x.classList.toggle("hidden",i!==0));
@@ -580,16 +599,17 @@ function closeEditor(){$("editor").classList.add("hidden");document.body.style.o
 $("edok").onclick=()=>{const r=ED.resolve;ED.resolve=null;closeEditor();if(r)r({poster:ED.poster,figs:ED.figs});};
 $("edcancel").onclick=()=>{if(!confirm("Close the editor? Your draft and edits will be lost."))return;const r=ED.reject;ED.reject=null;closeEditor();if(r)r({message:"Cancelled. Nothing was recorded.",cancelled:true});};
 
-/* edit a finished poster: /?edit=<slug> (no AI or voice calls) */
+/* requests that need ownership: asks for the admin code when the poster was made in another browser */
+let edAdmin="";
+async function edSend(path,opts){let tries=0;for(;;){try{return await call(path,{...opts,headers:{...(opts.headers||{}),...(edAdmin?{"x-admin-code":edAdmin}:{})}});}
+  catch(e){if(e.code==="not_owner"&&tries<2){tries++;const c=prompt((edAdmin?"That code didn't work. ":"This poster was made in another browser. ")+"Enter the admin code:");if(!c)throw {message:"Cancelled."};edAdmin=c.trim();continue;}
+    if(e.code==="not_owner")throw {message:"The admin code didn't match."};throw e;}}}
+/* edit a finished poster: /?edit=<slug> (no AI or voice calls, except an optional re-record of a panel) */
 async function editExisting(slug){
   let v;try{v=await call("/api/posters/"+slug);}catch(e){alert(e.message||"Could not load that poster.");return;}
   await call("/api/me").catch(()=>{});
-  let res;try{res=await reviewAndEdit(v.poster,v.spokenName||v.displayName,{existing:slug,displayName:v.displayName});}catch(e){history.replaceState(null,"",location.pathname);return;}
-  let admin="";
-  let tries=0;
-  const send=async(path,opts)=>{for(;;){try{return await call(path,{...opts,headers:{...(opts.headers||{}),...(admin?{"x-admin-code":admin}:{})}});}
-    catch(e){if(e.code==="not_owner"&&tries<2){tries++;const c=prompt((admin?"That code didn't work. ":"This poster was made in another browser. ")+"Enter the admin code to save your changes:");if(!c)throw {message:"Not saved."};admin=c.trim();continue;}
-      if(e.code==="not_owner")throw {message:"Not saved: the admin code didn't match."};throw e;}}};
+  let res;try{res=await reviewAndEdit(v.poster,v.spokenName||v.displayName,{existing:slug,displayName:v.displayName,hasVoice:!!v.hasVoice});}catch(e){history.replaceState(null,"",location.pathname);return;}
+  const send=edSend;
   try{
     for(const [k,f] of Object.entries(res.figs))if(f.blob)await send("/api/figure?slug="+slug+"&panel="+k,{method:"POST",headers:{"content-type":"image/png"},body:f.blob});
     await send("/api/poster-update",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug,poster:res.poster})});
