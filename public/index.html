@@ -489,12 +489,17 @@ $("edask").onclick=async()=>{
     const fd=new FormData();fd.append("pdf",paperFile,"paper.pdf");fd.append("poster",JSON.stringify(ED.poster));fd.append("request",req);fd.append("spoken",ED.spoken);
     const d=await call("/api/revise",{method:"POST",body:fd});
     const old=ED.poster,nw=d.poster;nw.figures=old.figures||{};
-    const changed=PANELS.filter(k=>JSON.stringify(old[k])!==JSON.stringify(nw[k])||old.scripts[k]!==nw.scripts[k]);
-    const podChanged=JSON.stringify(old.podcast)!==JSON.stringify(nw.podcast);
+    const shown=PANELS.filter(k=>JSON.stringify(old[k])!==JSON.stringify(nw[k])),voiceOnly=PANELS.filter(k=>!shown.includes(k)&&old.scripts[k]!==nw.scripts[k]);
+    const changed=shown.concat(voiceOnly),podChanged=JSON.stringify(old.podcast)!==JSON.stringify(nw.podcast),note=String(nw.edit_note||"").trim();nw.edit_note="";
     ED.history.push(old);ED.poster=nw;$("edundo").classList.remove("hidden");
     sendPreview(changed,changed[0]);renderScripts();
     $("edaimsg").className="edmsg ok";
-    $("edaimsg").textContent=changed.length||podChanged?"Updated: "+changed.map(k=>PANEL_NAMES[k]).concat(podChanged?["podcast script"]:[]).join(", ")+". Changed panels are outlined in orange. Check them against your paper.":"AI made no changes. Try describing the change more specifically.";
+    const parts=[];
+    if(shown.length)parts.push("Poster changed: "+shown.map(k=>PANEL_NAMES[k]).join(", ")+" (outlined in orange).");
+    if(voiceOnly.length)parts.push("Narration only: "+voiceOnly.map(k=>PANEL_NAMES[k]).join(", ")+" (see Scripts).");
+    if(podChanged)parts.push("Podcast script updated.");
+    $("edaimsg").innerHTML=(note?"<b>AI:</b> "+esc(note)+"<br>":"")+esc(parts.length?parts.join(" "):"Nothing changed. Try describing the change more specifically.")+(shown.length?"<br>Check the changes against your paper.":"");
+    if(!shown.length&&!voiceOnly.length&&!podChanged)$("edaimsg").className="edmsg bad";
     $("edreq").value="";
   }catch(e){$("edaimsg").className="edmsg bad";$("edaimsg").innerHTML=friendly(e);}
   $("edask").disabled=false;

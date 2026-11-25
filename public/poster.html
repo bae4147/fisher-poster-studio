@@ -43,7 +43,7 @@ button{font:inherit}
 .st{border:calc(var(--u)*.6) solid var(--ink);padding:calc(var(--u)*2);font-size:calc(var(--u)*3.5);line-height:1.35;background:var(--paper)}
 .st b{display:block;font-size:calc(var(--u)*4.2);margin-bottom:calc(var(--u)*.8)}
 .st .k{display:inline-block;margin-top:calc(var(--u)*1);background:var(--ink);color:var(--paper);padding:0 calc(var(--u)*1.2);font-size:calc(var(--u)*3.2)}
-.do{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:calc(var(--u)*2.5)}
+.do{display:grid;grid-template-columns:repeat(auto-fit,minmax(calc(var(--u)*72),1fr));gap:calc(var(--u)*2.5)}
 .do div{font-size:calc(var(--u)*3.8);line-height:1.38;border-left:calc(var(--u)*1.4) solid var(--green);padding-left:calc(var(--u)*2.2)}
 /* ---- visual elements ---- */
 .zone h4 .ic{font-size:calc(var(--u)*5.6);line-height:1}
@@ -343,7 +343,7 @@ function renderPoster(v){
   z3.append(fl);if(figM)z3.append(figM);if(M.note){const n=E(el("p",null,M.note),"methods.note");n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
   /* takeaway: icon tips */
   const T=p.takeaway,z4=zone("takeaway",true);z4.append(E(el("p","big",T.headline),"takeaway.headline"));const dd=el("div","do");
-  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon||EDIT)d.append(IC(el("span","ic",t.icon||"＋"),"takeaway.tips."+i+".icon"));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(d);});z4.append(dd);m.append(z4);
+  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon||EDIT)d.append(IC(el("span","ic",t.icon||"＋"),"takeaway.tips."+i+".icon"));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(d);});{const n=(T.tips||[]).length;dd.style.gridTemplateColumns="repeat("+(n===4?2:Math.max(1,Math.min(n,3)))+",minmax(0,1fr))";}z4.append(dd);m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
   if(EDIT){bindEdit(m);return;}
   loadMore(v);

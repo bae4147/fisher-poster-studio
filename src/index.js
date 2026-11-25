@@ -123,7 +123,7 @@ const NODE = { type: "object", additionalProperties: false, required: ["label", 
   label: S("Construct name, 1-4 plain words"), sign: { type: "string", enum: ["+", "-", ""], description: "Direction of its effect on the next box to the right (for moderators: how it changes the link); empty if not stated" } } };
 const POSTER_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "podcast", "brief", "suggested_questions"],
+  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "podcast", "edit_note", "brief", "suggested_questions"],
   properties: {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
@@ -143,8 +143,8 @@ const POSTER_SCHEMA = {
         moderators: { type: "array", items: NODE, description: "0-2 conditions that change the effect; empty if none" } } } } },
     findings: { type: "object", additionalProperties: false, required: ["icon", "headline", "points", "stats", "chart"], properties: {
       icon: ICON(), headline: S("Main result, max 15 words"),
-      points: { type: "array", description: "Exactly 3 key findings", items: { type: "object", additionalProperties: false, required: ["icon", "text"], properties: { icon: ICON(), text: S("Max 12 words, plain language") } } },
-      stats: { type: "array", description: "2-3 numbers that appear in the paper", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
+      points: { type: "array", description: "3 key findings by default (2-6 if the author asks for more or fewer)", items: { type: "object", additionalProperties: false, required: ["icon", "text"], properties: { icon: ICON(), text: S("Max 12 words, plain language") } } },
+      stats: { type: "array", description: "2-3 numbers that appear in the paper (up to 5 if the author asks)", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
         value: S("A short number or ratio exactly as reported, e.g. 4/4, .59, 524"), label: S("What it is, max 6 words") } } },
       chart: { type: "object", additionalProperties: false, required: ["title", "bars"], description: "A simple bar chart comparing values the paper reports in the same unit (e.g., treatment vs. control, scenario A vs. B). Leave bars empty if the paper has no such comparison.", properties: {
         title: S("What the bars compare, with the unit, max 10 words"),
@@ -152,17 +152,18 @@ const POSTER_SCHEMA = {
           label: S("Bar label, max 4 words"), value: { type: "number", description: "The value as a number, for bar length" }, shown: S("The value exactly as reported, e.g. 3.42, 18%") } } } } } } },
     methods: { type: "object", additionalProperties: false, required: ["icon", "studies"], properties: {
       icon: ICON(),
-      studies: { type: "array", description: "1-3 steps or studies in order (group extra studies)", items: { type: "object", additionalProperties: false, required: ["icon", "name", "detail", "tag"], properties: {
+      studies: { type: "array", description: "1-3 steps or studies in order, grouping extra studies (up to 5 if the author asks)", items: { type: "object", additionalProperties: false, required: ["icon", "name", "detail", "tag"], properties: {
         icon: ICON(), name: S("e.g. Study 1 · Field survey, max 5 words"), detail: S("Sample or setting, max 15 words"), tag: S("2-3 word design label") } } } } },
     takeaway: { type: "object", additionalProperties: false, required: ["icon", "headline", "tips"], properties: {
       icon: ICON(), headline: S("The practical lesson, max 12 words"),
-      tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
+      tips: { type: "array", description: "3 tips by default (2-6 if the author asks for more or fewer)", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
     scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
     podcast: { type: "object", additionalProperties: false, required: ["lines"], description: "A 3-minute two-person podcast conversation about the paper", properties: {
       lines: { type: "array", description: "20-30 conversational turns between host and guest, 420-480 words in total", items: { type: "object", additionalProperties: false, required: ["speaker", "text", "section"], properties: {
         speaker: { type: "string", enum: ["host", "guest"] },
         text: S("What this speaker says in this turn, 2-60 words"),
         section: { type: "string", enum: [...SECTIONS, ""], description: "The poster panel this turn is mainly about, so the poster can zoom to it; empty for greetings and small talk" } } } } } },
+    edit_note: S("Only when revising at the author's request: one or two plain sentences telling the author exactly what you changed, or why part of the request could not be done. Empty string for a new draft."),
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
   }
@@ -240,6 +241,9 @@ async function revisePoster(env, fileId, spoken, current, request, hostKey) {
 You are now REVISING an existing poster at the author's request. Rules for revising:
 - Apply the request faithfully, using the paper for any facts. If the request asks for something the paper does not support, make the closest accurate change.
 - Keep every part the request does not touch exactly as it is: copy unchanged text, items and scripts word for word.
+- The author's request overrides the default counts and word limits of the drafting rules: if they ask to add, remove or reorder items (for example another takeaway tip or finding), do it, and give new items the same form as the existing ones (icon, title, text).
+- Panels as numbered on the poster: 1 About the author (introduction), 2 Motivation, 3 Research narrative (narrative), 4 Key findings (findings), 5 Research methods (methods), 6 Takeaway (takeaway). "Section 6" means the takeaway panel, and so on.
+- Fill edit_note with one or two sentences on exactly what you changed, or what you could not do and why.
 - When content changes, update the narration script of that panel and any podcast turns about it, so the audio will match the poster. Keep the podcast's opening question and overall length.
 - Figures cropped from the paper replace the drawn chart or model diagram in their panel; when a panel has one, describe that figure there and leave findings.chart.bars empty if the figure is in the findings panel.` },
       { role: "user", content: [
@@ -288,14 +292,15 @@ function cleanPoster(j, hostKey) {
     motivation: text(j.motivation, 2),
     narrative: { ...text(j.narrative, 3), model: { predictors: nodes(m.predictors, 3), mediators: nodes(m.mediators, 2), outcomes: nodes(m.outcomes, 3), moderators: nodes(m.moderators, 2) } },
     findings: { icon: Ic(j.findings?.icon), headline: St(j.findings?.headline, 240),
-      points: A(j.findings?.points, 4).map(x => typeof x === "string" ? { icon: "", text: St(x, 300) } : { icon: Ic(x?.icon), text: St(x?.text, 300) }).filter(x => x.text),
-      stats: A(j.findings?.stats, 4).map(s => ({ value: St(s?.value, 16), label: St(s?.label, 90) })).filter(s => s.value),
+      points: A(j.findings?.points, 6).map(x => typeof x === "string" ? { icon: "", text: St(x, 300) } : { icon: Ic(x?.icon), text: St(x?.text, 300) }).filter(x => x.text),
+      stats: A(j.findings?.stats, 5).map(s => ({ value: St(s?.value, 16), label: St(s?.label, 90) })).filter(s => s.value),
       chart: { title: St(j.findings?.chart?.title, 120), bars } },
-    methods: { icon: Ic(j.methods?.icon), studies: A(j.methods?.studies, 4).map(s => ({ icon: Ic(s?.icon), name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
-    takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
+    methods: { icon: Ic(j.methods?.icon), studies: A(j.methods?.studies, 5).map(s => ({ icon: Ic(s?.icon), name: St(s?.name, 60), detail: St(s?.detail, 320), tag: St(s?.tag, 40) })).filter(s => s.name || s.detail), note: St(j.methods?.note, 300) },
+    takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 6).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
     podcast: { host: HOSTS[hostKey].name, hostKey, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
     figures: Object.fromEntries(FIGURE_PANELS.filter(k => j.figures && j.figures[k]).map(k => [k, { caption: St(j.figures[k].caption, 200) }])),
+    edit_note: St(j.edit_note, 600),
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
   if (!p.title || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
