@@ -642,11 +642,14 @@ $("build").onclick=async()=>{
     step("clone","done");
 
     cur="narr";
+    const ids={guest:[],host:[]};   // earlier recordings in each voice, so ElevenLabs keeps the same tone (request stitching)
+    const keep=(who,r)=>{if(r&&r.request_id){ids[who].push(r.request_id);ids[who]=ids[who].slice(-3);}};
     for(const [i,k] of SECTIONS.entries()){
       step("narr","on","("+(i+1)+"/"+SECTIONS.length+")");
-      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,section:k,text:poster.scripts[k]});
-      try{await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}
-      catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+      const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,section:k,text:poster.scripts[k],prev_ids:ids.guest});
+      let r;try{r=await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}
+      catch(e){if(e.status>=500||!e.status){await sleep(2000);r=await call("/api/narrate",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+      keep("guest",r);
     }
     step("narr","done","("+SECTIONS.length+"/"+SECTIONS.length+")");
 
@@ -655,9 +658,10 @@ $("build").onclick=async()=>{
     for(const [i,l] of L.entries()){
       step("pod","on","("+(i+1)+"/"+L.length+")");
       const body=JSON.stringify({voice_id:v.voice_id,voice_token:v.voice_token,slug:v.slug,index:i,speaker:l.speaker,host:(poster.podcast&&poster.podcast.hostKey)||"stock",text:l.text,
-        previous_text:L.slice(Math.max(0,i-2),i).map(x=>x.text).join(" "),next_text:(L[i+1]&&L[i+1].text)||""});
-      try{await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}
-      catch(e){if(e.status>=500||!e.status){await sleep(2000);await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+        previous_text:L.slice(Math.max(0,i-2),i).map(x=>x.text).join(" "),next_text:(L[i+1]&&L[i+1].text)||"",prev_ids:ids[l.speaker==="host"?"host":"guest"]});
+      let r;try{r=await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}
+      catch(e){if(e.status>=500||!e.status){await sleep(2000);r=await call("/api/podcast-line",{method:"POST",headers:{"content-type":"application/json"},body});}else throw e;}
+      keep(l.speaker==="host"?"host":"guest",r);
     }
     step("pod","done","("+L.length+"/"+L.length+")");
 

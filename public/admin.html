@@ -53,6 +53,24 @@
     <div class="msg" id="msg"></div>
   </div>
   <div class="card">
+    <label>Voice lab</label>
+    <p style="margin:0 0 10px;color:#4b5563;font-size:14px">Hear one clone read the same sentence with different models and settings, then pick what sounds most like the person (accent, tone). Each sample uses about 150 ElevenLabs characters. Enter the admin code above first.</p>
+    <button id="vlload" type="button" style="margin-top:0">Load clones</button>
+    <div id="vlbox" style="display:none">
+      <label for="vlvoice">Clone</label><select id="vlvoice"></select>
+      <label for="vltext">Sentence</label>
+      <textarea id="vltext" style="box-sizing:border-box;width:100%;font:inherit;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;min-height:70px">Hi, I'm glad you stopped by. In this study, we asked a simple question: what happens to leaders when they thank the people they work with?</textarea>
+      <label>Models to compare</label>
+      <div id="vlmodels" style="display:flex;flex-wrap:wrap;gap:12px;font-weight:400"></div>
+      <label>Stability values to compare</label>
+      <div id="vlstabs" style="display:flex;flex-wrap:wrap;gap:12px;font-weight:400"></div>
+      <button id="vlgo" type="button">Generate samples</button>
+      <p id="vlcur" style="font-size:13px;color:#6b7280;margin:10px 0 0"></p>
+      <div id="vlout" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card">
     <label>Feedback from the review screen</label>
     <p style="margin:0 0 10px;color:#4b5563;font-size:14px">What authors wanted to change but couldn't. Enter the admin code above, then load.</p>
     <button id="fbload" type="button" style="margin-top:0">Load feedback</button>
@@ -64,6 +82,32 @@
 const $=id=>document.getElementById(id);let blob=null;
 async function showCurrent(){for(const h of ["ac","hun"]){let look=null;try{const r=await fetch("/avatar/host-"+h+".json?t="+Date.now());if(r.ok)look=await r.json();}catch(e){}$("cur-"+h).innerHTML=spriteSVG(look||{});}}
 showCurrent();
+/* voice lab */
+const VL_MODELS=[["eleven_multilingual_v2","Multilingual v2 (current default)",true],["eleven_turbo_v2_5","Turbo v2.5",true],["eleven_flash_v2_5","Flash v2.5",false],["eleven_v3","v3",true]];
+const VL_STABS=[["0.5",false],["0.7",true],["0.85",true]];
+const vlAdmin=()=>document.getElementById("code").value.trim();
+VL_MODELS.forEach(([id,label,on])=>{const l=document.createElement("label");l.style.cssText="display:flex;gap:6px;align-items:center;margin:0;font-weight:400";l.innerHTML='<input type="checkbox" value="'+id+'"'+(on?" checked":"")+'> '+label;document.getElementById("vlmodels").append(l);});
+VL_STABS.forEach(([v,on])=>{const l=document.createElement("label");l.style.cssText="display:flex;gap:6px;align-items:center;margin:0;font-weight:400";l.innerHTML='<input type="checkbox" value="'+v+'"'+(on?" checked":"")+'> '+v;document.getElementById("vlstabs").append(l);});
+document.getElementById("vlload").addEventListener("click",async()=>{
+  try{const r=await fetch("/api/voicelab",{headers:{"x-admin-code":vlAdmin()},credentials:"same-origin"});const d=await r.json();if(d.error)throw d.error;
+    const sel=document.getElementById("vlvoice");sel.innerHTML="";d.voices.forEach(v=>{const o=document.createElement("option");o.value=v.id;o.textContent=v.name+" ("+v.id+")";sel.append(o);});
+    document.getElementById("vlcur").textContent="Studio now uses: "+d.current.model+", stability "+d.current.stability+", similarity "+d.current.similarity+".";
+    document.getElementById("vlbox").style.display="block";}
+  catch(e){alert((e&&e.message)||"Could not load clones.");}
+});
+document.getElementById("vlgo").addEventListener("click",async()=>{
+  const out=document.getElementById("vlout"),btn=document.getElementById("vlgo");out.innerHTML="";btn.disabled=true;
+  const models=[...document.querySelectorAll("#vlmodels input:checked")].map(x=>x.value),stabs=[...document.querySelectorAll("#vlstabs input:checked")].map(x=>Number(x.value));
+  for(const m of models)for(const st of stabs){
+    const row=document.createElement("div");row.style.cssText="display:flex;gap:12px;align-items:center;border-top:1px solid #e5e7eb;padding:8px 0";
+    const t=document.createElement("div");t.style.cssText="width:220px;font-size:13.5px";t.textContent=m+" · stability "+st;row.append(t);out.append(row);
+    try{const r=await fetch("/api/voicelab",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-admin-code":vlAdmin()},body:JSON.stringify({voice_id:document.getElementById("vlvoice").value,text:document.getElementById("vltext").value,model:m,stability:st,similarity:0.9})});
+      if(!r.ok){const d=await r.json().catch(()=>({}));throw (d.error||{message:"Failed ("+r.status+")"});}
+      const a=document.createElement("audio");a.controls=true;a.src=URL.createObjectURL(await r.blob());row.append(a);}
+    catch(e){const x=document.createElement("span");x.style.color="#b91c1c";x.style.fontSize="13px";x.textContent=e.message||"Failed";row.append(x);}
+  }
+  btn.disabled=false;
+});
 document.getElementById("fbload").addEventListener("click",async()=>{
   const box=document.getElementById("fblist");box.textContent="Loading…";
   try{const r=await fetch("/api/feedback",{headers:{"x-admin-code":document.getElementById("code").value.trim()},credentials:"same-origin"});const d=await r.json();if(d.error)throw d.error;

@@ -304,15 +304,27 @@ async function deleteVoice(env, voiceId) {
 /* Cloned voices keep the speaker's own accent better with high similarity and speaker boost.
    ctx.model overrides the model (per-host setting); models that accept a language code are told it is English. */
 const LANG_CODE_MODELS = /^(eleven_turbo_v2_5|eleven_flash_v2_5|eleven_v3)/;
+/* Consistency across a poster's recordings:
+   - a fixed seed per poster (ctx.seed) so generations vary less;
+   - request stitching (ctx.prev_ids): ElevenLabs continues from the earlier recordings in the same voice;
+   - previous_text / next_text only when there is nothing to stitch to. */
+const STITCH_MODELS = /^(eleven_multilingual_v2|eleven_turbo_v2_5|eleven_flash_v2_5|eleven_turbo_v2|eleven_flash_v2)$/;
+const seedFor = slug => { let h = 2166136261; for (const c of String(slug || "")) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) % 4294967295; };
 async function tts(env, voiceId, text, ctx = {}) {
   const model = ctx.model || env.MODEL_ID || "eleven_multilingual_v2";
+  const ids = (Array.isArray(ctx.prev_ids) ? ctx.prev_ids : []).filter(x => /^[\w-]{6,80}$/.test(String(x))).slice(-3);
+  const stitch = ids.length && STITCH_MODELS.test(model);
   const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
     method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: model, voice_settings: { stability: Number(env.VOICE_STABILITY || 0.6), similarity_boost: Number(env.VOICE_SIMILARITY || 0.9), use_speaker_boost: true },
+    body: JSON.stringify({ text, model_id: model,
+      voice_settings: { stability: Number(ctx.stability ?? env.VOICE_STABILITY ?? 0.7), similarity_boost: Number(ctx.similarity ?? env.VOICE_SIMILARITY ?? 0.9), use_speaker_boost: true },
       ...(LANG_CODE_MODELS.test(model) ? { language_code: "en" } : {}),
-      ...(ctx.previous_text ? { previous_text: ctx.previous_text.slice(-600) } : {}), ...(ctx.next_text ? { next_text: ctx.next_text.slice(0, 600) } : {}) })
+      ...(Number.isInteger(ctx.seed) ? { seed: ctx.seed } : {}),
+      ...(stitch ? { previous_request_ids: ids } : {}),
+      ...(!stitch && ctx.previous_text ? { previous_text: ctx.previous_text.slice(-600) } : {}), ...(!stitch && ctx.next_text ? { next_text: ctx.next_text.slice(0, 600) } : {}) })
   });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
+  if (ctx.meta) ctx.meta.requestId = res.headers.get("request-id") || "";
   return res.arrayBuffer();
 }
 
@@ -535,13 +547,31 @@ async function api(request, env, url) {
     const voice = v.voiceId || (isAdmin && /^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") ? b.voice_id : "");
     if (!voice) return err(400, "This poster doesn't have a saved voice. Enter the ElevenLabs voice ID of the author's clone (admin).", "no_voice");
     return slowJson(async () => {
-      const audio = await tts(env, voice, text);
+      const audio = await tts(env, voice, text, { seed: seedFor(slug) });
       await env.POSTERS.put(`audio:${slug}:${section}`, audio, { metadata: { bytes: audio.byteLength } });
       v.poster.scripts[section] = text; v.audioVer = { ...(v.audioVer || {}), [section]: Date.now() };
       if (!v.voiceId && isAdmin) v.voiceId = b.voice_id;
       await env.POSTERS.put("poster:" + slug, JSON.stringify(v), { metadata: { title: v.poster.title.slice(0, 200), displayName: v.displayName, createdAt: v.createdAt } });
       return { ok: true, ver: v.audioVer[section] };
     });
+  }
+
+  /* voice lab (admin page): compare models and settings on one clone before changing the studio's defaults */
+  if (p === "/api/voicelab" && (method === "GET" || method === "POST")) {
+    if (!env.ADMIN_CODE || (request.headers.get("x-admin-code") || "") !== env.ADMIN_CODE) return err(403, "Wrong admin code.", "bad_admin");
+    if (method === "GET") {
+      const res = await fetch(`${elevenBase(env)}/v1/voices`, { headers: { "xi-api-key": env.ELEVENLABS_API_KEY, accept: "application/json" } });
+      if (!res.ok) return err(502, await upstreamMessage(res, "ElevenLabs (voice list)"), "upstream");
+      const voices = ((await res.json()).voices || []).filter(v => v.category === "cloned").map(v => ({ id: v.voice_id, name: v.name }));
+      return json({ voices, current: { model: env.MODEL_ID || "eleven_multilingual_v2", stability: Number(env.VOICE_STABILITY ?? 0.7), similarity: Number(env.VOICE_SIMILARITY ?? 0.9) } });
+    }
+    let b = {}; try { b = await request.json(); } catch {}
+    const text = String(b.text || "").trim().slice(0, 300);
+    if (!/^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") || !text || !/^eleven_[a-z0-9_]{2,40}$/.test(b.model || "")) return err(400, "Bad request.", "bad_request");
+    try {
+      const audio = await tts(env, b.voice_id, text, { model: b.model, stability: Math.min(1, Math.max(0, Number(b.stability))), similarity: Math.min(1, Math.max(0, Number(b.similarity))), seed: 12345 });
+      return new Response(audio, { headers: { "content-type": "audio/mpeg", "cache-control": "no-store" } });
+    } catch (e) { return err(502, e.message || "ElevenLabs failed.", "upstream"); }
   }
 
   /* a figure the author cropped from the paper, stored with the poster */
@@ -588,9 +618,10 @@ async function api(request, env, url) {
     if (!/^[a-z0-9]{6,20}$/.test(slug || "") || !SECTIONS.includes(section)) return err(400, "Bad request.", "bad_request");
     if (!text || text.length > MAX_SCRIPT) return err(400, "The script is empty or too long.", "bad_request");
     return slowJson(async () => {
-      const audio = await tts(env, voice_id, text);
+      const meta = {};
+      const audio = await tts(env, voice_id, text, { seed: seedFor(slug), prev_ids: b.prev_ids, meta });
       await env.POSTERS.put(`audio:${slug}:${section}`, audio, { metadata: { bytes: audio.byteLength } });
-      return { ok: true, bytes: audio.byteLength };
+      return { ok: true, bytes: audio.byteLength, request_id: meta.requestId };
     });
   }
 
@@ -600,7 +631,7 @@ async function api(request, env, url) {
     if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id || "") || voice_token !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
     if (!/^[a-z0-9]{6,20}$/.test(slug || "") || !Number.isInteger(i) || i < 0 || i >= MAX_POD_LINES) return err(400, "Bad request.", "bad_request");
     if (!text || text.length > MAX_POD_LINE) return err(400, "The line is empty or too long.", "bad_request");
-    const ctx = { previous_text: String(b.previous_text || ""), next_text: String(b.next_text || "") };
+    const meta = {}, ctx = { previous_text: String(b.previous_text || ""), next_text: String(b.next_text || ""), seed: seedFor(slug), prev_ids: b.prev_ids, meta };
     return slowJson(async () => {
       let audio;
       if (b.speaker === "host") {
@@ -614,7 +645,7 @@ async function api(request, env, url) {
         }
       } else audio = await tts(env, voice_id, text, ctx);
       await env.POSTERS.put(`audio:${slug}:pod-${i}`, audio, { metadata: { bytes: audio.byteLength } });
-      return { ok: true, bytes: audio.byteLength };
+      return { ok: true, bytes: audio.byteLength, request_id: meta.requestId };
     });
   }
 

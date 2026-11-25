@@ -33,7 +33,7 @@
     "HOST_AC_MODEL_ID": "",
     "HOST_HUN_MODEL_ID": "",
     // Voice settings for every clone: higher similarity keeps each speaker's own accent.
-    "VOICE_STABILITY": "0.6",
+    "VOICE_STABILITY": "0.7",
     "VOICE_SIMILARITY": "0.9"
   }
 }
