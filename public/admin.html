@@ -52,12 +52,28 @@
     <button id="go" disabled>Make character</button>
     <div class="msg" id="msg"></div>
   </div>
+  <div class="card">
+    <label>Feedback from the review screen</label>
+    <p style="margin:0 0 10px;color:#4b5563;font-size:14px">What authors wanted to change but couldn't. Enter the admin code above, then load.</p>
+    <button id="fbload" type="button" style="margin-top:0">Load feedback</button>
+    <div id="fblist" style="margin-top:14px"></div>
+  </div>
 </main>
 <script src="/lib/sprite.js"></script>
 <script>
 const $=id=>document.getElementById(id);let blob=null;
 async function showCurrent(){for(const h of ["ac","hun"]){let look=null;try{const r=await fetch("/avatar/host-"+h+".json?t="+Date.now());if(r.ok)look=await r.json();}catch(e){}$("cur-"+h).innerHTML=spriteSVG(look||{});}}
 showCurrent();
+document.getElementById("fbload").addEventListener("click",async()=>{
+  const box=document.getElementById("fblist");box.textContent="Loading…";
+  try{const r=await fetch("/api/feedback",{headers:{"x-admin-code":document.getElementById("code").value.trim()},credentials:"same-origin"});const d=await r.json();if(d.error)throw d.error;
+    box.innerHTML="";if(!d.items.length){box.textContent="No feedback yet.";return;}
+    d.items.forEach(f=>{const it=document.createElement("div");it.style.cssText="border-top:1px solid #e5e7eb;padding:10px 0";
+      const meta=document.createElement("div");meta.style.cssText="font-size:12.5px;color:#6b7280;margin-bottom:4px";meta.textContent=[new Date(f.at).toLocaleString(),f.name,f.title].filter(Boolean).join(" · ");
+      if(f.slug){const a=document.createElement("a");a.href="/p/"+f.slug;a.target="_blank";a.textContent=" (poster)";meta.append(a);}
+      const t=document.createElement("div");t.style.whiteSpace="pre-wrap";t.textContent=f.text;it.append(meta,t);box.append(it);});
+  }catch(e){box.textContent=(e&&e.message)||"Could not load.";}
+});
 fetch("/api/me",{credentials:"same-origin"}).catch(()=>{});   // sets the browser session the API needs
 function check(){$("go").disabled=!(blob&&$("ok").checked&&$("code").value.trim());}
 ["ok","code"].forEach(id=>$(id).addEventListener("input",check));

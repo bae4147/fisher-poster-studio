@@ -207,6 +207,13 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
      <li><b>Show a figure from your paper:</b> use the <b>Add a figure</b> tab.</li>
     </ul>
     <div class="notice" style="margin:4px 0 0;font-size:13.5px">The narration and podcast don't update by themselves. After you change content, check the <b>Scripts</b> tab so your AI voice says the same thing as the poster.</div>
+    <div style="border-top:1px solid #e5e7eb;margin-top:20px;padding-top:16px">
+     <label class="f" for="fbtext" style="margin-top:0">Feedback</label>
+     <p class="sub" style="margin:2px 0 8px">Was there anything you wanted to change but couldn't? Tell us and we'll use it to improve the studio.</p>
+     <textarea id="fbtext" maxlength="2000" style="min-height:80px" placeholder="e.g., I wanted to move the Methods panel above Key findings."></textarea>
+     <div class="edrow"><button class="btn sec" type="button" id="fbsend">Send feedback</button></div>
+     <div class="edmsg" id="fbmsg"></div>
+    </div>
    </div>
    <div class="edsec hidden" data-t="fig">
     <p class="sub">Show a figure exactly as it appears in your paper. Find the page, drag a box around the figure, choose the panel, and place it.</p>
@@ -492,6 +499,15 @@ document.querySelectorAll(".edtabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".edsec").forEach(x=>x.classList.toggle("hidden",x.dataset.t!==b.dataset.t));
   if(b.dataset.t==="fig")openPdf();if(b.dataset.t==="scr")renderScripts();
 });
+/* feedback on what could not be edited */
+$("fbsend").onclick=async()=>{
+  const text=$("fbtext").value.trim();if(!text){$("fbmsg").className="edmsg bad";$("fbmsg").textContent="Please write your feedback first.";return;}
+  $("fbsend").disabled=true;
+  try{await call("/api/feedback",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text,name:ED.displayName||$("dname").value.trim(),title:ED.poster&&ED.poster.title,slug:ED.existing||""})});
+    $("fbtext").value="";$("fbmsg").className="edmsg ok";$("fbmsg").textContent="Thanks! Your feedback was sent.";}
+  catch(e){$("fbmsg").className="edmsg bad";$("fbmsg").textContent=(e&&e.message)||"Could not send. Please try again.";}
+  $("fbsend").disabled=false;
+};
 /* add / delete items sent from the preview */
 const ITEM_NEW={"findings.points":{icon:"💡",text:"New finding"},"findings.stats":{value:"0",label:"What this number is"},"methods.studies":{icon:"📋",name:"New step",detail:"What happened in this step",tag:""},
   "takeaway.tips":{icon:"⭐",title:"New tip",text:"What to do"},"introduction.tags":"New tag","narrative.model.predictors":{label:"New factor",sign:""},"narrative.model.mediators":{label:"New mechanism",sign:""},

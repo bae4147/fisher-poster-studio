@@ -495,6 +495,26 @@ async function api(request, env, url) {
     return json({ ok: true, slug });
   }
 
+  /* feedback from the review screen: what authors wanted to change but couldn't */
+  if (p === "/api/feedback" && method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const text = String(b.text || "").trim().slice(0, 2000);
+    if (!text) return err(400, "Please write your feedback first.", "bad_request");
+    const day = "fbcount:" + new Date().toISOString().slice(0, 10), used = parseInt(await env.POSTERS.get(day) || "0", 10);
+    if (used >= 200) return err(429, "Too much feedback today. Please try again tomorrow.", "daily_limit");
+    await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
+    const rec = { text, name: String(b.name || "").slice(0, 80), title: String(b.title || "").slice(0, 200), slug: /^[a-z0-9]{6,20}$/.test(b.slug || "") ? b.slug : "", at: new Date().toISOString() };
+    await env.POSTERS.put("feedback:" + (9999999999999 - Date.now()) + "-" + slugMake(), JSON.stringify(rec));   // newest first when listed
+    return json({ ok: true });
+  }
+  if (p === "/api/feedback" && method === "GET") {
+    if (!env.ADMIN_CODE || (request.headers.get("x-admin-code") || "") !== env.ADMIN_CODE) return err(403, "Wrong admin code.", "bad_admin");
+    const list = await env.POSTERS.list({ prefix: "feedback:", limit: 200 });
+    const items = [];
+    for (const k of list.keys) { const v = await env.POSTERS.get(k.name, "json"); if (v) items.push(v); }
+    return json({ items });
+  }
+
   /* a figure the author cropped from the paper, stored with the poster */
   if (p === "/api/figure" && method === "POST") {
     const voice_id = url.searchParams.get("voice_id") || "", slug = url.searchParams.get("slug") || "", panel = url.searchParams.get("panel") || "";
