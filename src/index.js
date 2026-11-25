@@ -6,7 +6,6 @@
  *   GET  /api/me                                -> {ok, mine} and a signed per-browser owner cookie
  *   GET  /api/status                            -> which server settings are present (no values)
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
- *   POST /api/revise          (multipart: pdf, poster, request, spoken) -> revised draft (review screen)
  *   POST /api/figure          (image body) -> stores a figure cropped from the paper
  *   POST /api/voice           (audio body: the original file, WAV or MP3) -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
@@ -123,7 +122,7 @@ const NODE = { type: "object", additionalProperties: false, required: ["label", 
   label: S("Construct name, 1-4 plain words"), sign: { type: "string", enum: ["+", "-", ""], description: "Direction of its effect on the next box to the right (for moderators: how it changes the link); empty if not stated" } } };
 const POSTER_SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "podcast", "edit_note", "brief", "suggested_questions"],
+  required: ["title", "authors", "venue", "introduction", "motivation", "narrative", "findings", "methods", "takeaway", "scripts", "podcast", "brief", "suggested_questions"],
   properties: {
     title: S("The paper's title"),
     authors: { type: "array", items: S("Author name"), description: "Authors in order" },
@@ -143,8 +142,8 @@ const POSTER_SCHEMA = {
         moderators: { type: "array", items: NODE, description: "0-2 conditions that change the effect; empty if none" } } } } },
     findings: { type: "object", additionalProperties: false, required: ["icon", "headline", "points", "stats", "chart"], properties: {
       icon: ICON(), headline: S("Main result, max 15 words"),
-      points: { type: "array", description: "3 key findings by default (2-6 if the author asks for more or fewer)", items: { type: "object", additionalProperties: false, required: ["icon", "text"], properties: { icon: ICON(), text: S("Max 12 words, plain language") } } },
-      stats: { type: "array", description: "2-3 numbers that appear in the paper (up to 5 if the author asks)", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
+      points: { type: "array", description: "Exactly 3 key findings", items: { type: "object", additionalProperties: false, required: ["icon", "text"], properties: { icon: ICON(), text: S("Max 12 words, plain language") } } },
+      stats: { type: "array", description: "2-3 numbers that appear in the paper", items: { type: "object", additionalProperties: false, required: ["value", "label"], properties: {
         value: S("A short number or ratio exactly as reported, e.g. 4/4, .59, 524"), label: S("What it is, max 6 words") } } },
       chart: { type: "object", additionalProperties: false, required: ["title", "bars"], description: "A simple bar chart comparing values the paper reports in the same unit (e.g., treatment vs. control, scenario A vs. B). Leave bars empty if the paper has no such comparison.", properties: {
         title: S("What the bars compare, with the unit, max 10 words"),
@@ -152,18 +151,17 @@ const POSTER_SCHEMA = {
           label: S("Bar label, max 4 words"), value: { type: "number", description: "The value as a number, for bar length" }, shown: S("The value exactly as reported, e.g. 3.42, 18%") } } } } } } },
     methods: { type: "object", additionalProperties: false, required: ["icon", "studies"], properties: {
       icon: ICON(),
-      studies: { type: "array", description: "1-3 steps or studies in order, grouping extra studies (up to 5 if the author asks)", items: { type: "object", additionalProperties: false, required: ["icon", "name", "detail", "tag"], properties: {
+      studies: { type: "array", description: "1-3 steps or studies in order (group extra studies)", items: { type: "object", additionalProperties: false, required: ["icon", "name", "detail", "tag"], properties: {
         icon: ICON(), name: S("e.g. Study 1 · Field survey, max 5 words"), detail: S("Sample or setting, max 15 words"), tag: S("2-3 word design label") } } } } },
     takeaway: { type: "object", additionalProperties: false, required: ["icon", "headline", "tips"], properties: {
       icon: ICON(), headline: S("The practical lesson, max 12 words"),
-      tips: { type: "array", description: "3 tips by default (2-6 if the author asks for more or fewer)", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
+      tips: { type: "array", description: "Exactly 3", items: { type: "object", additionalProperties: false, required: ["icon", "title", "text"], properties: { icon: ICON(), title: S("2-3 words"), text: S("Max 10 words") } } } } },
     scripts: { type: "object", additionalProperties: false, required: SECTIONS, properties: Object.fromEntries(SECTIONS.map(k => [k, S("Narration script for the " + k + " panel, " + (SHORT_SECTIONS.includes(k) ? "70-100" : "130-165") + " words")])) },
     podcast: { type: "object", additionalProperties: false, required: ["lines"], description: "A 3-minute two-person podcast conversation about the paper", properties: {
       lines: { type: "array", description: "20-30 conversational turns between host and guest, 420-480 words in total", items: { type: "object", additionalProperties: false, required: ["speaker", "text", "section"], properties: {
         speaker: { type: "string", enum: ["host", "guest"] },
         text: S("What this speaker says in this turn, 2-60 words"),
         section: { type: "string", enum: [...SECTIONS, ""], description: "The poster panel this turn is mainly about, so the poster can zoom to it; empty for greetings and small talk" } } } } } },
-    edit_note: S("Only when revising at the author's request: one or two plain sentences telling the author exactly what you changed, or why part of the request could not be done. Empty string for a new draft."),
     brief: S("A factual digest for a Q&A assistant, 450-900 words"),
     suggested_questions: { type: "array", items: S("Max 9 words"), description: "4 short questions a curious visitor might ask" }
   }
@@ -225,38 +223,6 @@ function notesText(notes) {
   if (notes.motivation) parts.push("The author's own text for the MOTIVATION panel:\n<<<\n" + notes.motivation + "\n>>>");
   return parts.length ? "\n\n" + parts.join("\n\n") : "";
 }
-/* Revise a draft from the author's plain-language request (review screen, before recording). */
-function toSchemaShape(p) {
-  const { figures, suggested, podcast, ...rest } = p || {};
-  return { ...rest, suggested_questions: suggested || [], podcast: { lines: (podcast && podcast.lines) || [] } };
-}
-async function revisePoster(env, fileId, spoken, current, request, hostKey) {
-  const figs = Object.entries(current.figures || {}).map(([k, f]) => `- ${k} panel: a figure the author cropped from the paper${f.caption ? `, captioned "${f.caption}"` : ""}. Write that panel's text about this figure.`).join("\n");
-  const body = {
-    model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
-    reasoning: { effort: env.OPENAI_REASONING || "medium" },
-    input: [
-      { role: "system", content: posterSystem(spoken, hostKey) + `
-
-You are now REVISING an existing poster at the author's request. Rules for revising:
-- Apply the request faithfully, using the paper for any facts. If the request asks for something the paper does not support, make the closest accurate change.
-- Keep every part the request does not touch exactly as it is: copy unchanged text, items and scripts word for word.
-- The author's request overrides the default counts and word limits of the drafting rules: if they ask to add, remove or reorder items (for example another takeaway tip or finding), do it, and give new items the same form as the existing ones (icon, title, text).
-- Panels as numbered on the poster: 1 About the author (introduction), 2 Motivation, 3 Research narrative (narrative), 4 Key findings (findings), 5 Research methods (methods), 6 Takeaway (takeaway). "Section 6" means the takeaway panel, and so on.
-- Fill edit_note with one or two sentences on exactly what you changed, or what you could not do and why.
-- When content changes, update the narration script of that panel and any podcast turns about it, so the audio will match the poster. Keep the podcast's opening question and overall length.
-- Figures cropped from the paper replace the drawn chart or model diagram in their panel; when a panel has one, describe that figure there and leave findings.chart.bars empty if the figure is in the findings panel.` },
-      { role: "user", content: [
-        { type: "input_file", file_id: fileId, detail: env.PDF_DETAIL || "low" },
-        { type: "input_text", text: "CURRENT POSTER (JSON):\n" + JSON.stringify(toSchemaShape(current)) + (figs ? "\n\nFIGURES PLACED BY THE AUTHOR:\n" + figs : "") + "\n\nTHE AUTHOR'S REQUEST:\n<<<\n" + request + "\n>>>\n\nReturn the complete revised poster." } ] } ],
-    text: { format: { type: "json_schema", name: "poster", strict: true, schema: POSTER_SCHEMA } }
-  };
-  const res = await fetch(`${openaiBase(env)}/v1/responses`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI"), "upstream");
-  const out = cleanPoster(JSON.parse(outputText(await res.json())), hostKey);
-  out.figures = cleanPoster({ ...current, figures: current.figures }, hostKey).figures;   // figures are the author's choice, not the model's
-  return out;
-}
 async function draftPoster(env, fileId, spoken, notes = {}, hostKey = "stock") {
   const body = {
     model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
@@ -288,7 +254,7 @@ function cleanPoster(j, hostKey) {
   if (bars.length < 2) bars = [];
   const p = {
     title: St(j.title, 300), authors: A(j.authors, 20).map(x => St(x, 80)).filter(Boolean), venue: St(j.venue, 200),
-    introduction: { role: St(j.introduction?.role, 140), bio: St(j.introduction?.bio, 400), tags: A(j.introduction?.tags, 3).map(x => St(x, 40)).filter(Boolean) },
+    introduction: { role: St(j.introduction?.role, 140), bio: St(j.introduction?.bio, 400), tags: A(j.introduction?.tags, 5).map(x => St(x, 40)).filter(Boolean) },
     motivation: text(j.motivation, 2),
     narrative: { ...text(j.narrative, 3), model: { predictors: nodes(m.predictors, 3), mediators: nodes(m.mediators, 2), outcomes: nodes(m.outcomes, 3), moderators: nodes(m.moderators, 2) } },
     findings: { icon: Ic(j.findings?.icon), headline: St(j.findings?.headline, 240),
@@ -300,7 +266,6 @@ function cleanPoster(j, hostKey) {
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
     podcast: { host: HOSTS[hostKey].name, hostKey, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
     figures: Object.fromEntries(FIGURE_PANELS.filter(k => j.figures && j.figures[k]).map(k => [k, { caption: St(j.figures[k].caption, 200) }])),
-    edit_note: St(j.edit_note, 600),
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
   if (!p.title || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
@@ -505,25 +470,6 @@ async function api(request, env, url) {
       const fileId = await uploadPdf(env, bytes, fname);
       const display = String(url.searchParams.get("display") || "").slice(0, 80);
       try { return { poster: await draftPoster(env, fileId, spoken, notes, chooseHost(env, spoken, display)) }; }
-      finally { fetch(`${openaiBase(env)}/v1/files/${fileId}`, { method: "DELETE", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } }).catch(() => {}); }
-    });
-  }
-
-  if (p === "/api/revise" && method === "POST") {
-    let fd; try { fd = await request.formData(); } catch { return err(400, "Bad request.", "bad_request"); }
-    const pdf = fd.get("pdf"), req = String(fd.get("request") || "").trim().slice(0, MAX_REQUEST), spoken = String(fd.get("spoken") || "").trim().slice(0, 60);
-    let current; try { current = JSON.parse(String(fd.get("poster") || "")); } catch { return err(400, "Bad request.", "bad_request"); }
-    if (!pdf || typeof pdf === "string" || !req || !spoken) return err(400, "Bad request.", "bad_request");
-    const bytes = await pdf.arrayBuffer();
-    if (bytes.byteLength > MAX_PDF) return err(413, "That PDF is larger than 30 MB.", "too_large");
-    const day = "revise:" + new Date().toISOString().slice(0, 10), limit = parseInt(env.DAILY_REVISE_LIMIT || "100", 10);
-    const used = parseInt(await env.POSTERS.get(day) || "0", 10);
-    if (used >= limit) return err(429, "The studio has reached today's limit of AI edits. Please try again tomorrow.", "daily_limit");
-    await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
-    const hostKey = HOSTS[current?.podcast?.hostKey] ? current.podcast.hostKey : "stock";
-    return slowJson(async () => {
-      const fileId = await uploadPdf(env, bytes, "paper.pdf");
-      try { return { poster: await revisePoster(env, fileId, spoken, current, req, hostKey) }; }
       finally { fetch(`${openaiBase(env)}/v1/files/${fileId}`, { method: "DELETE", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } }).catch(() => {}); }
     });
   }

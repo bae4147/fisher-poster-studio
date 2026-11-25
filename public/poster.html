@@ -105,6 +105,14 @@ body.editmode [data-path]{outline:calc(var(--u)*.4) dashed transparent;outline-o
 body.editmode [data-path]:hover{outline-color:#2563eb88}
 body.editmode [data-path]:focus{outline:calc(var(--u)*.5) solid #2563eb;background:#fff}
 body.editmode .zone{cursor:default}
+body.editmode .edit-item{position:relative}
+.xdel{position:absolute;top:calc(var(--u)*-1.6);right:calc(var(--u)*-1.6);width:calc(var(--u)*4.6);height:calc(var(--u)*4.6);border-radius:50%;border:0;background:#dc2626;color:#fff;font:bold calc(var(--u)*3.4)/1 sans-serif;cursor:pointer;display:none;z-index:3;padding:0}
+body.editmode .edit-item:hover>.xdel{display:block}
+.xadd{font:bold calc(var(--u)*3)/1 "Courier New",monospace;color:#2563eb;background:#eff6ff;border:calc(var(--u)*.4) dashed #2563eb;padding:calc(var(--u)*1) calc(var(--u)*2);cursor:pointer;margin-top:calc(var(--u)*1.2);align-self:flex-start}
+.xadd:hover{background:#dbeafe}
+.flow .xadd{align-self:center;margin-top:0}
+.atags .xadd{margin-top:0}
+.ipts .xadd{display:inline-block}
 body.editmode [data-icon]{cursor:pointer;border-radius:4px;outline:calc(var(--u)*.4) dashed transparent}
 body.editmode [data-icon]:hover{outline-color:#2563eb88;background:#ffffff99}
 .icpick{position:fixed;z-index:100;width:320px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:8px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 10px 30px #0004}
@@ -277,6 +285,9 @@ function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className
 const EDIT=new URLSearchParams(location.search).get("edit")==="1";
 let FIGSRC={};   // edit mode: panel -> image data URL sent by the studio
 const ICONS=["🏥","🩺","💊","❤️","🧠","👥","🤝","💬","🗣️","📈","📉","📊","🔁","⚙️","🔧","🧪","🔬","📋","⏱️","📅","🎯","💡","⚖️","🧭","🏭","💼","🏢","🌱","🔍","❓","⚠️","✅","🛡️","💰","🧮","🖥️","🤖","📚","🎓","🏠","🧩","🔗","🙏","😟","😊","🌍","🚀","⭐"];   // same list the server accepts
+/* edit mode: × on list items and "+ Add" at the end of lists; the studio applies the change and re-renders */
+const DEL=(node,list,i)=>{if(EDIT&&node){node.classList.add("edit-item");const b=el("button","xdel","×");b.type="button";b.title="Delete";b.contentEditable="false";b.addEventListener("click",e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:"del",list,index:i},location.origin);});node.append(b);}return node;};
+const ADD=(container,list,label)=>{if(EDIT&&container){const b=el("button","xadd","+ "+label);b.type="button";b.addEventListener("click",e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:"add",list},location.origin);});container.append(b);}return container;};
 const IC=(node,path)=>{if(EDIT&&node){node.dataset.icon=path;node.title="Change icon";}return node;};
 const E=(node,path)=>{if(EDIT&&node){node.dataset.path=path;node.contentEditable="true";node.spellcheck=true;}return node;};
 function figureEl(p,panel,slug){
@@ -291,7 +302,7 @@ function renderPoster(v){
   GUEST_SVG=null;
   if(v.avatar)lookSVG("/avatar/"+(v.slug||V.slug)+".json").then(svg=>{if(!svg)return;GUEST_SVG=svg;setFace("wguest",svg);document.querySelectorAll(".acard .av").forEach(a=>a.innerHTML=svg);const t=$("pzoom").querySelector(".ntalk svg");if(t)t.outerHTML=svg;});
   const p=v.poster,m=$("pmain");m.innerHTML="";
-  const head=el("div");head.id="phead";head.append(el("div","tag",EDIT?"PREVIEW · CLICK ANY TEXT TO EDIT IT":"INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN"),E(el("h2",null,p.title),"title"));
+  const head=el("div");head.id="phead";head.append(el("div","tag",EDIT?"PREVIEW · CLICK TEXT OR ICONS TO EDIT · × DELETES · + ADDS":"INTERACTIVE POSTER · CLICK ANY PANEL TO ZOOM IN AND LISTEN"),E(el("h2",null,p.title),"title"));
   const au=el("div","au");p.authors.forEach((a,i)=>{if(i)au.append(", ");au.append(a===v.displayName||v.displayName.includes(a)||a.includes(v.spokenName||"\u0000")?el("b",null,a):document.createTextNode(a));});if(p.venue){au.append(" · ");au.append(E(el("i",null,p.venue),"venue"));}head.append(au);m.append(head);
   let num=0;const N=()=>String(++num);
   const zone=(k,wide)=>zoneEl(k,N(),SEC_TITLES[k],wide);
@@ -305,7 +316,7 @@ function renderPoster(v){
       const z=zone("introduction",true);z.classList.add("author");const card=el("div","acard");
       const av=el("div","av");av.innerHTML=faceHTML();card.append(av);
       const info=el("div","ai");info.append(el("div","an",v.displayName));if(I.role||EDIT)info.append(E(el("div","ar",I.role||""),"introduction.role"));if(I.bio||EDIT)info.append(E(el("p","ab",I.bio||""),"introduction.bio"));
-      if(I.tags&&I.tags.length){const tg=el("div","atags");I.tags.forEach((t,i)=>tg.append(E(el("span",null,t),"introduction.tags."+i)));info.append(tg);}
+      if((I.tags&&I.tags.length)||EDIT){const tg=el("div","atags");(I.tags||[]).forEach((t,i)=>tg.append(DEL(E(el("span",null,t),"introduction.tags."+i),"introduction.tags",i)));ADD(tg,"introduction.tags","tag");info.append(tg);}
       card.append(info);z.append(card);m.append(z);
     } else if(I.headline){const z=zone("introduction");lead(z,I,true,"introduction");m.append(z);}
   }
@@ -319,31 +330,32 @@ function renderPoster(v){
     if(figN)z.append(figN);
     if(hasModel){
       const row=el("div","model");
-      const col=(list,cls,key)=>{const c=el("div","col "+cls);list.forEach((n,i)=>c.append(E(el("div","node",n.label),"narrative.model."+key+"."+i+".label")));return c;};
+      const col=(list,cls,key)=>{const c=el("div","col "+cls);list.forEach((n,i)=>c.append(DEL(E(el("div","node",n.label),"narrative.model."+key+"."+i+".label"),"narrative.model."+key,i)));ADD(c,"narrative.model."+key,"box");return c;};
       const arrow=list=>{const a=el("div","arr");const signs=[...new Set(list.map(n=>n.sign).filter(Boolean))];if(signs.length===1){const sm=el("small",signs[0]==="-"?"neg":null,signs[0]==="-"?"−":"+");a.append(sm);}a.append(document.createTextNode("→"));return a;};
       row.append(col(md.predictors,"pre","predictors"),arrow(md.predictors));
-      if(md.mediators&&md.mediators.length)row.append(col(md.mediators,"med","mediators"),arrow(md.mediators));
+      if((md.mediators&&md.mediators.length)||EDIT)row.append(col(md.mediators||[],"med","mediators"),arrow(md.mediators||[]));
       row.append(col(md.outcomes,"out","outcomes"));z.append(row);
-      if(md.moderators&&md.moderators.length){const mr=el("div","modrow");md.moderators.forEach((n,i)=>mr.append(EDIT?E(el("div","node",n.label),"narrative.model.moderators."+i+".label"):el("div","node",n.label+(n.sign?" ("+(n.sign==="-"?"weakens":"strengthens")+")":""))));z.append(mr);}
+      if((md.moderators&&md.moderators.length)||EDIT){const mr=el("div","modrow");(md.moderators||[]).forEach((n,i)=>mr.append(EDIT?DEL(E(el("div","node",n.label),"narrative.model.moderators."+i+".label"),"narrative.model.moderators",i):el("div","node",n.label+(n.sign?" ("+(n.sign==="-"?"weakens":"strengthens")+")":""))));ADD(mr,"narrative.model.moderators","condition");z.append(mr);}
     }
     m.append(z);
   }
   /* findings: icon points, stats, bar chart */
   const F=p.findings;
   const z2=zone("findings",wideMid);z2.append(E(el("p","big",F.headline),"findings.headline"));
-  const ul=el("ul","ipts");(F.points||[]).forEach((t,i)=>{const li=el("li");if(typeof t==="string"){li.append(el("span","ic","•"),E(el("span",null,t),"findings.points."+i));}else{li.append(IC(el("span","ic",t.icon||"•"),"findings.points."+i+".icon"),E(el("span",null,t.text),"findings.points."+i+".text"));}ul.append(li);});z2.append(ul);
-  if(F.stats&&F.stats.length){const sg=el("div","stats");F.stats.forEach((s,i)=>{const d=el("div","stat");d.append(E(el("b",null,s.value),"findings.stats."+i+".value"),E(el("span",null,s.label),"findings.stats."+i+".label"));sg.append(d);});z2.append(sg);}
+  const ul=el("ul","ipts");(F.points||[]).forEach((t,i)=>{const li=el("li");if(typeof t==="string"){li.append(el("span","ic","•"),E(el("span",null,t),"findings.points."+i));}else{li.append(IC(el("span","ic",t.icon||"•"),"findings.points."+i+".icon"),E(el("span",null,t.text),"findings.points."+i+".text"));}ul.append(DEL(li,"findings.points",i));});ADD(ul,"findings.points","finding");z2.append(ul);
+  if((F.stats&&F.stats.length)||EDIT){const sg=el("div","stats");(F.stats||[]).forEach((s,i)=>{const d=el("div","stat");d.append(E(el("b",null,s.value),"findings.stats."+i+".value"),E(el("span",null,s.label),"findings.stats."+i+".label"));sg.append(DEL(d,"findings.stats",i));});z2.append(sg);if(EDIT)ADD(z2,"findings.stats","number");}
   if(bars.length>=2){const ch=el("div","chart");if(F.chart.title)ch.append(E(el("div","ct",F.chart.title),"findings.chart.title"));const mx=Math.max(...bars.map(b=>b.value))||1;
+    if(EDIT){const x=el("button","xdel","×");x.type="button";x.title="Delete chart";x.addEventListener("click",e=>{e.stopPropagation();parent.postMessage({type:"fps-op",op:"clear",list:"findings.chart.bars"},location.origin);});ch.classList.add("edit-item");ch.append(x);}
     bars.forEach((b,bi)=>{const r=el("div","row");r.append(E(el("span","lab",b.label),"findings.chart.bars."+bi+".label"));const tr=el("div","track");const br=el("div","bar",b.shown||String(b.value));br.style.width=Math.max(4,100*b.value/mx)+"%";tr.append(br);r.append(tr);ch.append(r);});z2.append(ch);}
   if(figF)z2.append(figF);
   m.append(z2);
   /* methods: step flow */
   const M=p.methods,z3=zone("methods",true),fl=el("div","flow");
-  (M.studies||[]).forEach((s,i)=>{if(i)fl.append(el("div","arr","→"));const d=el("div","st");if(s.icon||EDIT)d.append(IC(el("span","ic",s.icon||"＋"),"methods.studies."+i+".icon"));d.append(E(el("b",null,s.name),"methods.studies."+i+".name"),E(el("span",null,s.detail),"methods.studies."+i+".detail"));if(s.tag){d.append(el("br"));d.append(E(el("span","k",s.tag),"methods.studies."+i+".tag"));}fl.append(d);});
-  z3.append(fl);if(figM)z3.append(figM);if(M.note){const n=E(el("p",null,M.note),"methods.note");n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
+  (M.studies||[]).forEach((s,i)=>{if(i)fl.append(el("div","arr","→"));const d=el("div","st");if(s.icon||EDIT)d.append(IC(el("span","ic",s.icon||"＋"),"methods.studies."+i+".icon"));d.append(E(el("b",null,s.name),"methods.studies."+i+".name"),E(el("span",null,s.detail),"methods.studies."+i+".detail"));if(s.tag){d.append(el("br"));d.append(E(el("span","k",s.tag),"methods.studies."+i+".tag"));}fl.append(DEL(d,"methods.studies",i));});
+  ADD(fl,"methods.studies","step");z3.append(fl);if(figM)z3.append(figM);if(M.note){const n=E(el("p",null,M.note),"methods.note");n.style.marginTop="calc(var(--u)*2)";z3.append(n);}m.append(z3);
   /* takeaway: icon tips */
   const T=p.takeaway,z4=zone("takeaway",true);z4.append(E(el("p","big",T.headline),"takeaway.headline"));const dd=el("div","do");
-  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon||EDIT)d.append(IC(el("span","ic",t.icon||"＋"),"takeaway.tips."+i+".icon"));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(d);});{const n=(T.tips||[]).length;dd.style.gridTemplateColumns="repeat("+(n===4?2:Math.max(1,Math.min(n,3)))+",minmax(0,1fr))";}z4.append(dd);m.append(z4);
+  (T.tips||[]).forEach((t,i)=>{const d=el("div");if(t.icon||EDIT)d.append(IC(el("span","ic",t.icon||"＋"),"takeaway.tips."+i+".icon"));d.append(E(el("b",null,t.title),"takeaway.tips."+i+".title"),document.createTextNode(". "),E(el("span",null,t.text),"takeaway.tips."+i+".text"));dd.append(DEL(d,"takeaway.tips",i));});{const n=(T.tips||[]).length;dd.style.gridTemplateColumns="repeat("+(n===4?2:Math.max(1,Math.min(n,3)))+",minmax(0,1fr))";}z4.append(dd);ADD(z4,"takeaway.tips","tip");m.append(z4);
   m.append(Object.assign(el("div",null,"Poster content was drafted by AI from the paper and may contain errors; check the paper for details. Narration uses an AI voice of "+v.displayName+", created with their consent."),{id:"pfoot"}));
   if(EDIT){bindEdit(m);return;}
   loadMore(v);
@@ -524,7 +536,7 @@ function bindEdit(root){
   root.querySelectorAll("[data-path]").forEach(n=>{
     n.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();n.blur();}});
     n.addEventListener("paste",e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text");document.execCommand("insertText",false,t.replace(/\s+/g," "));});
-    n.addEventListener("input",()=>parent.postMessage({type:"fps-edit",path:n.dataset.path,value:n.textContent.replace(/\s+/g," ").trim()},location.origin));
+    n.addEventListener("input",()=>{const c=n.cloneNode(true);c.querySelectorAll(".xdel,.xadd").forEach(x=>x.remove());parent.postMessage({type:"fps-edit",path:n.dataset.path,value:c.textContent.replace(/\s+/g," ").trim()},location.origin);});
   });
 }
 if(EDIT){

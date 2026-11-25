@@ -187,17 +187,22 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
 
 
 <div id="editor" class="hidden" role="dialog" aria-modal="true" aria-labelledby="edttl">
- <div class="edbar"><b id="edttl">Review and edit your poster</b><span class="muted">Nothing is recorded yet. Your changes also go into the narration and podcast.</span><span class="sp"></span>
+ <div class="edbar"><b id="edttl">Review and edit your poster</b><span class="muted">Nothing is recorded yet. Recording starts when you click the button on the right.</span><span class="sp"></span>
   <button class="btn sec" type="button" id="edcancel">Cancel</button><button class="btn" type="button" id="edok">Looks good: record voice and save</button></div>
  <div class="edbody">
   <iframe id="edframe" title="Poster preview"></iframe>
   <aside class="edside">
-   <div class="edtabs"><button type="button" data-t="ai" class="on">Ask AI</button><button type="button" data-t="fig">Add a figure</button><button type="button" data-t="scr">Scripts</button></div>
+   <div class="edtabs"><button type="button" data-t="ai" class="on">Edit</button><button type="button" data-t="fig">Add a figure</button><button type="button" data-t="scr">Scripts</button></div>
    <div class="edsec" data-t="ai">
-    <p class="sub"><b>Small fixes:</b> click any text on the poster and type.<br><b>Bigger changes</b> (what a panel shows, which result to feature, the overall story): describe them here. AI rereads your paper and updates the affected panels, their narration and the podcast.</p>
-    <textarea id="edreq" maxlength="2000" placeholder="e.g., In Key findings, feature the interaction with Machiavellianism (Figure 5) instead of prosocial motivation."></textarea>
-    <div class="edrow"><button class="btn" type="button" id="edask">Apply with AI</button><button class="btn sec hidden" type="button" id="edundo">Undo last AI change</button></div>
-    <div class="edmsg" id="edaimsg"></div>
+    <p class="sub"><b>Edit right on the poster:</b></p>
+    <ul class="sub" style="padding-left:18px;margin-top:0;line-height:1.7">
+     <li><b>Change text:</b> click it and type.</li>
+     <li><b>Change an icon:</b> click it and pick another.</li>
+     <li><b>Delete an item:</b> hover over it and click the red <b>×</b>.</li>
+     <li><b>Add an item:</b> click a blue <b>+ Add</b> button (findings, numbers, steps, tips, tags, model boxes).</li>
+     <li><b>Show a figure from your paper:</b> use the <b>Add a figure</b> tab.</li>
+    </ul>
+    <div class="notice" style="margin:4px 0 0;font-size:13.5px">The narration and podcast don't update by themselves. After you change content, check the <b>Scripts</b> tab so your AI voice says the same thing as the poster.</div>
    </div>
    <div class="edsec hidden" data-t="fig">
     <p class="sub">Show a figure exactly as it appears in your paper. Find the page, drag a box around the figure, choose the panel, and place it.</p>
@@ -209,7 +214,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
     <input type="text" id="figcap" maxlength="200" placeholder="e.g., Figure 5. Gratitude × Machiavellianism">
     <div class="edrow"><button class="btn" type="button" id="figadd" disabled>Place figure</button></div>
     <div id="figlist"></div>
-    <p class="sub" style="margin-top:14px">Tip: after placing a figure, ask AI to “rewrite Key findings around the figure” so the text and narration match it.</p>
+    <p class="sub" style="margin-top:14px">Tip: after placing a figure, update that panel's text here on the poster and its narration in the <b>Scripts</b> tab so they describe the figure.</p>
    </div>
    <div class="edsec hidden" data-t="scr">
     <p class="sub">What your AI voice will say. Edit freely; AI changes update these too.</p>
@@ -451,6 +456,7 @@ function sendPreview(changed,scrollTo){
 window.addEventListener("message",e=>{
   if(e.origin!==location.origin||!e.data||!ED.poster)return;
   if(e.data.type==="fps-ready")sendPreview();
+  if(e.data.type==="fps-op")itemOp(e.data);
   if(e.data.type==="fps-edit"){
     const path=String(e.data.path||""),val=String(e.data.value||"").slice(0,600);
     if(path.startsWith("figures.")){const k=path.split(".")[1];if(ED.poster.figures&&ED.poster.figures[k])ED.poster.figures[k].caption=val.slice(0,200);renderFigList();}
@@ -481,30 +487,21 @@ document.querySelectorAll(".edtabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".edsec").forEach(x=>x.classList.toggle("hidden",x.dataset.t!==b.dataset.t));
   if(b.dataset.t==="fig")openPdf();if(b.dataset.t==="scr")renderScripts();
 });
-/* Ask AI */
-$("edask").onclick=async()=>{
-  const req=$("edreq").value.trim();if(!req)return;
-  $("edask").disabled=true;$("edaimsg").className="edmsg";$("edaimsg").textContent="AI is rereading your paper and updating the poster… this usually takes about a minute.";
-  try{
-    const fd=new FormData();fd.append("pdf",paperFile,"paper.pdf");fd.append("poster",JSON.stringify(ED.poster));fd.append("request",req);fd.append("spoken",ED.spoken);
-    const d=await call("/api/revise",{method:"POST",body:fd});
-    const old=ED.poster,nw=d.poster;nw.figures=old.figures||{};
-    const shown=PANELS.filter(k=>JSON.stringify(old[k])!==JSON.stringify(nw[k])),voiceOnly=PANELS.filter(k=>!shown.includes(k)&&old.scripts[k]!==nw.scripts[k]);
-    const changed=shown.concat(voiceOnly),podChanged=JSON.stringify(old.podcast)!==JSON.stringify(nw.podcast),note=String(nw.edit_note||"").trim();nw.edit_note="";
-    ED.history.push(old);ED.poster=nw;$("edundo").classList.remove("hidden");
-    sendPreview(changed,changed[0]);renderScripts();
-    $("edaimsg").className="edmsg ok";
-    const parts=[];
-    if(shown.length)parts.push("Poster changed: "+shown.map(k=>PANEL_NAMES[k]).join(", ")+" (outlined in orange).");
-    if(voiceOnly.length)parts.push("Narration only: "+voiceOnly.map(k=>PANEL_NAMES[k]).join(", ")+" (see Scripts).");
-    if(podChanged)parts.push("Podcast script updated.");
-    $("edaimsg").innerHTML=(note?"<b>AI:</b> "+esc(note)+"<br>":"")+esc(parts.length?parts.join(" "):"Nothing changed. Try describing the change more specifically.")+(shown.length?"<br>Check the changes against your paper.":"");
-    if(!shown.length&&!voiceOnly.length&&!podChanged)$("edaimsg").className="edmsg bad";
-    $("edreq").value="";
-  }catch(e){$("edaimsg").className="edmsg bad";$("edaimsg").innerHTML=friendly(e);}
-  $("edask").disabled=false;
-};
-$("edundo").onclick=()=>{const prev=ED.history.pop();if(!prev)return;ED.poster=prev;sendPreview();renderScripts();if(!ED.history.length)$("edundo").classList.add("hidden");$("edaimsg").className="edmsg";$("edaimsg").textContent="Undid the last AI change.";};
+/* add / delete items sent from the preview */
+const ITEM_NEW={"findings.points":{icon:"💡",text:"New finding"},"findings.stats":{value:"0",label:"What this number is"},"methods.studies":{icon:"📋",name:"New step",detail:"What happened in this step",tag:""},
+  "takeaway.tips":{icon:"⭐",title:"New tip",text:"What to do"},"introduction.tags":"New tag","narrative.model.predictors":{label:"New factor",sign:""},"narrative.model.mediators":{label:"New mechanism",sign:""},
+  "narrative.model.outcomes":{label:"New outcome",sign:""},"narrative.model.moderators":{label:"New condition",sign:""}};
+const ITEM_MAX={"findings.points":6,"findings.stats":5,"methods.studies":5,"takeaway.tips":6,"introduction.tags":5,"narrative.model.predictors":3,"narrative.model.mediators":2,"narrative.model.outcomes":3,"narrative.model.moderators":2};
+function getPath(o,path){return path.split(".").reduce((t,k)=>t==null?t:t[k],o);}
+function itemOp(d){
+  const list=String(d.list||""),panel=list.split(".")[0];
+  if(d.op==="clear"&&list==="findings.chart.bars"){if(ED.poster.findings.chart)ED.poster.findings.chart.bars=[];sendPreview();return;}
+  if(!(list in ITEM_NEW))return;
+  let arr=getPath(ED.poster,list);if(!Array.isArray(arr)){setPath(ED.poster,list,[]);arr=getPath(ED.poster,list);}
+  if(d.op==="del"&&arr[d.index]!==undefined)arr.splice(d.index,1);
+  if(d.op==="add"){if(arr.length>=ITEM_MAX[list])return;arr.push(clone(ITEM_NEW[list]));}
+  sendPreview();   // re-render in place; the preview keeps its scroll position
+}
 /* Figures from the paper */
 async function openPdf(){
   if(ED.pdf)return;
@@ -543,7 +540,7 @@ $("figadd").onclick=async()=>{
 /* open / close */
 function reviewAndEdit(poster,spoken){
   ED.poster=clone(poster);ED.poster.figures=ED.poster.figures||{};ED.figs={};ED.history=[];ED.spoken=spoken;ED.pdf=null;
-  $("edaimsg").textContent="";$("edreq").value="";$("edundo").classList.add("hidden");$("figlist").innerHTML="";
+  $("figlist").innerHTML="";
   document.querySelectorAll(".edtabs button").forEach((x,i)=>x.classList.toggle("on",i===0));document.querySelectorAll(".edsec").forEach((x,i)=>x.classList.toggle("hidden",i!==0));
   $("edframe").src="/p/editpreview?edit=1";$("editor").classList.remove("hidden");document.body.style.overflow="hidden";
   return new Promise((res,rej)=>{ED.resolve=res;ED.reject=rej;});
