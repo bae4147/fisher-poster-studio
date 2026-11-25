@@ -8,7 +8,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "run_worker_first": ["/api/*", "/mcp/*", "/audio/*", "/avatar/*", "/p/*", "/health", "/lee"]
+    "run_worker_first": ["/api/*", "/mcp/*", "/audio/*", "/avatar/*", "/figure/*", "/p/*", "/health", "/lee"]
   },
   // Storage for posters and narration audio. Wrangler creates it on the first deploy.
   "kv_namespaces": [

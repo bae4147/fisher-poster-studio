@@ -6,6 +6,8 @@
  *   GET  /api/me                                -> {ok, mine} and a signed per-browser owner cookie
  *   GET  /api/status                            -> which server settings are present (no values)
  *   POST /api/draft           (PDF body)        -> OpenAI reads the paper, returns poster JSON
+ *   POST /api/revise          (multipart: pdf, poster, request, spoken) -> revised draft (review screen)
+ *   POST /api/figure          (image body) -> stores a figure cropped from the paper
  *   POST /api/voice           (audio body: the original file, WAV or MP3) -> ElevenLabs instant voice clone
  *   POST /api/narrate         {voice, text...}  -> ElevenLabs narration for one section, stored in KV
  *   POST /api/publish         {slug, poster...} -> saves the poster under a new permanent link (older posters are kept);
@@ -28,6 +30,8 @@ const SECTIONS = ["introduction", "motivation", "narrative", "findings", "method
 const SHORT_SECTIONS = ["introduction", "motivation"];
 const MAX_NOTE = 1500; // author-written introduction / motivation text
 const MAX_PDF = 30 * 1024 * 1024;
+const FIGURE_PANELS = ["narrative", "findings", "methods"];   // panels that can show a figure cropped from the paper
+const MAX_FIGURE = 4 * 1024 * 1024, MAX_REQUEST = 2000;
 const MAX_VOICE = 10 * 1024 * 1024;
 const MAX_SCRIPT = 2500;
 const MAX_POD_LINES = 32, MAX_POD_LINE = 700;
@@ -220,6 +224,35 @@ function notesText(notes) {
   if (notes.motivation) parts.push("The author's own text for the MOTIVATION panel:\n<<<\n" + notes.motivation + "\n>>>");
   return parts.length ? "\n\n" + parts.join("\n\n") : "";
 }
+/* Revise a draft from the author's plain-language request (review screen, before recording). */
+function toSchemaShape(p) {
+  const { figures, suggested, podcast, ...rest } = p || {};
+  return { ...rest, suggested_questions: suggested || [], podcast: { lines: (podcast && podcast.lines) || [] } };
+}
+async function revisePoster(env, fileId, spoken, current, request, hostKey) {
+  const figs = Object.entries(current.figures || {}).map(([k, f]) => `- ${k} panel: a figure the author cropped from the paper${f.caption ? `, captioned "${f.caption}"` : ""}. Write that panel's text about this figure.`).join("\n");
+  const body = {
+    model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
+    reasoning: { effort: env.OPENAI_REASONING || "medium" },
+    input: [
+      { role: "system", content: posterSystem(spoken, hostKey) + `
+
+You are now REVISING an existing poster at the author's request. Rules for revising:
+- Apply the request faithfully, using the paper for any facts. If the request asks for something the paper does not support, make the closest accurate change.
+- Keep every part the request does not touch exactly as it is: copy unchanged text, items and scripts word for word.
+- When content changes, update the narration script of that panel and any podcast turns about it, so the audio will match the poster. Keep the podcast's opening question and overall length.
+- Figures cropped from the paper replace the drawn chart or model diagram in their panel; when a panel has one, describe that figure there and leave findings.chart.bars empty if the figure is in the findings panel.` },
+      { role: "user", content: [
+        { type: "input_file", file_id: fileId, detail: env.PDF_DETAIL || "low" },
+        { type: "input_text", text: "CURRENT POSTER (JSON):\n" + JSON.stringify(toSchemaShape(current)) + (figs ? "\n\nFIGURES PLACED BY THE AUTHOR:\n" + figs : "") + "\n\nTHE AUTHOR'S REQUEST:\n<<<\n" + request + "\n>>>\n\nReturn the complete revised poster." } ] } ],
+    text: { format: { type: "json_schema", name: "poster", strict: true, schema: POSTER_SCHEMA } }
+  };
+  const res = await fetch(`${openaiBase(env)}/v1/responses`, { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "OpenAI"), "upstream");
+  const out = cleanPoster(JSON.parse(outputText(await res.json())), hostKey);
+  out.figures = cleanPoster({ ...current, figures: current.figures }, hostKey).figures;   // figures are the author's choice, not the model's
+  return out;
+}
 async function draftPoster(env, fileId, spoken, notes = {}, hostKey = "stock") {
   const body = {
     model: env.OPENAI_POSTER_MODEL || "gpt-6.1-sol",
@@ -262,6 +295,7 @@ function cleanPoster(j, hostKey) {
     takeaway: { icon: Ic(j.takeaway?.icon), headline: St(j.takeaway?.headline, 200), tips: A(j.takeaway?.tips, 3).map(t => ({ icon: Ic(t?.icon), title: St(t?.title, 60), text: St(t?.text, 260) })).filter(t => t.title || t.text) },
     scripts: Object.fromEntries(SECTIONS.map(k => [k, St(j.scripts?.[k], MAX_SCRIPT)])),
     podcast: { host: HOSTS[hostKey].name, hostKey, lines: A(j.podcast?.lines, MAX_POD_LINES).map(l => ({ speaker: l?.speaker === "host" ? "host" : "guest", text: St(l?.text, MAX_POD_LINE), section: SECTIONS.includes(l?.section) ? l.section : "" })).filter(l => l.text) },
+    figures: Object.fromEntries(FIGURE_PANELS.filter(k => j.figures && j.figures[k]).map(k => [k, { caption: St(j.figures[k].caption, 200) }])),
     brief: St(j.brief, 9000), suggested: A(j.suggested_questions || j.suggested, 4).map(x => St(x, 80)).filter(Boolean)
   };
   if (!p.title || !p.motivation.headline || !p.narrative.headline || !SECTIONS.every(k => p.scripts[k].length > 60)) throw new UpstreamError("The draft came back incomplete. Please try again.", "incomplete");
@@ -470,6 +504,38 @@ async function api(request, env, url) {
     });
   }
 
+  if (p === "/api/revise" && method === "POST") {
+    let fd; try { fd = await request.formData(); } catch { return err(400, "Bad request.", "bad_request"); }
+    const pdf = fd.get("pdf"), req = String(fd.get("request") || "").trim().slice(0, MAX_REQUEST), spoken = String(fd.get("spoken") || "").trim().slice(0, 60);
+    let current; try { current = JSON.parse(String(fd.get("poster") || "")); } catch { return err(400, "Bad request.", "bad_request"); }
+    if (!pdf || typeof pdf === "string" || !req || !spoken) return err(400, "Bad request.", "bad_request");
+    const bytes = await pdf.arrayBuffer();
+    if (bytes.byteLength > MAX_PDF) return err(413, "That PDF is larger than 30 MB.", "too_large");
+    const day = "revise:" + new Date().toISOString().slice(0, 10), limit = parseInt(env.DAILY_REVISE_LIMIT || "100", 10);
+    const used = parseInt(await env.POSTERS.get(day) || "0", 10);
+    if (used >= limit) return err(429, "The studio has reached today's limit of AI edits. Please try again tomorrow.", "daily_limit");
+    await env.POSTERS.put(day, String(used + 1), { expirationTtl: 60 * 60 * 48 });
+    const hostKey = HOSTS[current?.podcast?.hostKey] ? current.podcast.hostKey : "stock";
+    return slowJson(async () => {
+      const fileId = await uploadPdf(env, bytes, "paper.pdf");
+      try { return { poster: await revisePoster(env, fileId, spoken, current, req, hostKey) }; }
+      finally { fetch(`${openaiBase(env)}/v1/files/${fileId}`, { method: "DELETE", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } }).catch(() => {}); }
+    });
+  }
+
+  /* a figure the author cropped from the paper, stored with the poster */
+  if (p === "/api/figure" && method === "POST") {
+    const voice_id = url.searchParams.get("voice_id") || "", slug = url.searchParams.get("slug") || "", panel = url.searchParams.get("panel") || "";
+    if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id) || url.searchParams.get("voice_token") !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    if (!/^[a-z0-9]{6,20}$/.test(slug) || !FIGURE_PANELS.includes(panel)) return err(400, "Bad request.", "bad_request");
+    const type = (request.headers.get("content-type") || "").split(";")[0].trim();
+    if (!/^image\/(png|jpeg|webp)$/.test(type)) return err(400, "Figures must be PNG, JPEG or WebP.", "bad_figure");
+    const img = await request.arrayBuffer();
+    if (!img.byteLength || img.byteLength > MAX_FIGURE) return err(413, "The figure is larger than 4 MB.", "too_large");
+    await env.POSTERS.put(`figure:${slug}:${panel}`, img, { metadata: { type } });
+    return json({ ok: true });
+  }
+
   if (p === "/api/voice" && method === "POST") {
     if (request.headers.get("x-consent") !== "yes") return err(400, "Consent is required.", "no_consent");
     const name = String(request.headers.get("x-name") || "").trim().slice(0, 80);
@@ -565,6 +631,7 @@ async function api(request, env, url) {
     for (const k of SECTIONS) if (!(await env.POSTERS.get(`audio:${slug}:${k}`, "arrayBuffer"))) return err(400, "Narration for " + k + " is missing. Build again.", "missing_audio");
     const podN = poster.podcast.lines.length;
     for (let i = 0; i < podN; i++) if (!(await env.POSTERS.get(`audio:${slug}:pod-${i}`, "arrayBuffer"))) return err(400, "Podcast audio is missing. Build again.", "missing_audio");
+    for (const k of Object.keys(poster.figures)) if (!(await env.POSTERS.get(`figure:${slug}:${k}`, "stream"))) delete poster.figures[k];
     const createdAt = Date.now();
     const avatar = !!(await env.POSTERS.get(`avatar:${slug}`));
     await env.POSTERS.put("poster:" + slug, JSON.stringify({ displayName, spokenName, createdAt, poster, audio: SECTIONS, podcast: podN, avatar }), { metadata: { title: poster.title.slice(0, 200), displayName, createdAt } });
@@ -585,6 +652,12 @@ export default {
     try {
       if (p.startsWith("/mcp/") || p === "/health") return mcp.fetch(request, env, ctx);
       if (p.startsWith("/api/")) return await api(request, env, url);
+      const fg = p.match(/^\/figure\/([a-z0-9]{6,20})\/(narrative|findings|methods)\.png$/);
+      if (fg) {
+        const r = await env.POSTERS.getWithMetadata(`figure:${fg[1]}:${fg[2]}`, "arrayBuffer");
+        if (!r.value) return new Response("Not found", { status: 404 });
+        return new Response(r.value, { headers: { "content-type": (r.metadata && r.metadata.type) || "image/png", "cache-control": "public, max-age=86400" } });
+      }
       const av = p.match(/^\/avatar\/(host-(ac|hun)|[a-z0-9]{6,20})\.json$/);
       if (av) {
         let look = await env.POSTERS.get(av[2] ? `host_avatar:${av[2]}` : `avatar:${av[1]}`, "json");

@@ -25,6 +25,35 @@ button{font:inherit}
 .step .sub{font-size:14.5px;color:#6b7280;margin:0 0 16px;line-height:1.6}
 label.f{display:block;font-size:14px;font-weight:500;margin:14px 0 6px;color:#374151}
 input[type=text]{box-sizing:border-box;width:100%;font:inherit;font-size:15px;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;transition:border-color .15s, box-shadow .15s}
+
+/* ---------------- review & edit screen ---------------- */
+#editor{position:fixed;inset:0;z-index:50;background:#f3f4f6;display:flex;flex-direction:column}
+#editor.hidden{display:none}
+.edbar{display:flex;align-items:center;gap:14px;padding:12px 18px;background:#fff;border-bottom:1px solid #e5e7eb}
+.edbar b{font-size:16px}.edbar .muted{font-size:13.5px}.edbar .sp{flex:1}
+.edbody{flex:1;display:flex;min-height:0}
+#edframe{flex:1;border:0;min-width:0;background:#0b1418}
+.edside{width:380px;flex:0 0 380px;background:#fff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;min-height:0}
+.edtabs{display:flex;border-bottom:1px solid #e5e7eb}
+.edtabs button{flex:1;font:inherit;font-size:14px;font-weight:600;padding:11px 6px;background:none;border:0;border-bottom:2px solid transparent;color:#6b7280;cursor:pointer}
+.edtabs button.on{color:#111827;border-bottom-color:#2563eb}
+.edsec{padding:16px;overflow:auto;flex:1}
+.edsec.hidden{display:none}
+.edsec .sub{font-size:13.5px;margin:0 0 12px}
+.edsec textarea{min-height:110px}
+.edrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.edmsg{font-size:13.5px;margin-top:12px;line-height:1.5}
+.pgnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:13.5px}
+.pgwrap{position:relative;border:1px solid #d1d5db;background:#fff;user-select:none;touch-action:none;cursor:crosshair}
+.pgwrap canvas{display:block;width:100%}
+#pgsel{position:absolute;border:2px solid #2563eb;background:rgba(37,99,235,.12);display:none;pointer-events:none}
+.edsec label.f{margin-top:12px}
+.figitem{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:13.5px}
+.figitem img{width:64px;height:48px;object-fit:contain;border:1px solid #e5e7eb;background:#fff}
+.figitem span{flex:1}
+.scr{margin-bottom:14px}.scr .h{font-size:13px;font-weight:600;color:#374151;margin-bottom:4px}
+.scr textarea{min-height:70px;font-size:14px}
+.scr.pod textarea{min-height:44px}
 .photo{display:flex;gap:14px;align-items:flex-start}
 .photo img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;flex:0 0 auto}
 textarea{box-sizing:border-box;width:100%;font:inherit;font-size:15px;line-height:1.5;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;resize:vertical;min-height:96px;transition:border-color .15s, box-shadow .15s}
@@ -137,12 +166,13 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
    <span id="buildwhy" class="muted" style="margin-left:12px"></span>
    <div id="log" class="hidden">
     <div class="s" data-k="poster">1. Reading the paper and drafting the poster</div>
-    <div class="s" data-k="sample">2. Preparing your voice sample</div>
-    <div class="s" data-k="clone">3. Creating your voice clone</div>
-    <div class="s" data-k="narr">4. Recording narration <span id="narrn"></span></div>
-    <div class="s" data-k="pod">5. Recording the podcast <span id="podn"></span></div>
-    <div class="s" data-k="avatar">6. Drawing your character <span id="avatarn"></span></div>
-    <div class="s" data-k="save">7. Saving your poster</div>
+    <div class="s" data-k="review">2. Your review and edits</div>
+    <div class="s" data-k="sample">3. Preparing your voice sample</div>
+    <div class="s" data-k="clone">4. Creating your voice clone</div>
+    <div class="s" data-k="narr">5. Recording narration <span id="narrn"></span></div>
+    <div class="s" data-k="pod">6. Recording the podcast <span id="podn"></span></div>
+    <div class="s" data-k="avatar">7. Drawing your character <span id="avatarn"></span></div>
+    <div class="s" data-k="save">8. Saving your poster</div>
    </div>
    <div id="builderr" class="notice err hidden" style="margin-top:12px"></div>
    <div id="builddone" class="notice hidden" style="margin-top:12px"></div>
@@ -155,7 +185,41 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
  </div>
 </div>
 
+
+<div id="editor" class="hidden" role="dialog" aria-modal="true" aria-labelledby="edttl">
+ <div class="edbar"><b id="edttl">Review and edit your poster</b><span class="muted">Nothing is recorded yet. Your changes also go into the narration and podcast.</span><span class="sp"></span>
+  <button class="btn sec" type="button" id="edcancel">Cancel</button><button class="btn" type="button" id="edok">Looks good: record voice and save</button></div>
+ <div class="edbody">
+  <iframe id="edframe" title="Poster preview"></iframe>
+  <aside class="edside">
+   <div class="edtabs"><button type="button" data-t="ai" class="on">Ask AI</button><button type="button" data-t="fig">Add a figure</button><button type="button" data-t="scr">Scripts</button></div>
+   <div class="edsec" data-t="ai">
+    <p class="sub"><b>Small fixes:</b> click any text on the poster and type.<br><b>Bigger changes</b> (what a panel shows, which result to feature, the overall story): describe them here. AI rereads your paper and updates the affected panels, their narration and the podcast.</p>
+    <textarea id="edreq" maxlength="2000" placeholder="e.g., In Key findings, feature the interaction with Machiavellianism (Figure 5) instead of prosocial motivation."></textarea>
+    <div class="edrow"><button class="btn" type="button" id="edask">Apply with AI</button><button class="btn sec hidden" type="button" id="edundo">Undo last AI change</button></div>
+    <div class="edmsg" id="edaimsg"></div>
+   </div>
+   <div class="edsec hidden" data-t="fig">
+    <p class="sub">Show a figure exactly as it appears in your paper. Find the page, drag a box around the figure, choose the panel, and place it.</p>
+    <div class="pgnav"><button class="btn sec small" type="button" id="pgprev">◀ Prev</button><span id="pgnum">Loading…</span><button class="btn sec small" type="button" id="pgnext">Next ▶</button></div>
+    <div class="pgwrap" id="pgwrap"><canvas id="pgcan"></canvas><div id="pgsel"></div></div>
+    <label class="f" for="figpanel">Panel</label>
+    <select id="figpanel"><option value="findings">Key findings (replaces the drawn chart)</option><option value="narrative">Research narrative (replaces the drawn model)</option><option value="methods">Methods</option></select>
+    <label class="f" for="figcap">Caption <span class="muted" style="font-weight:400">(optional)</span></label>
+    <input type="text" id="figcap" maxlength="200" placeholder="e.g., Figure 5. Gratitude × Machiavellianism">
+    <div class="edrow"><button class="btn" type="button" id="figadd" disabled>Place figure</button></div>
+    <div id="figlist"></div>
+    <p class="sub" style="margin-top:14px">Tip: after placing a figure, ask AI to “rewrite Key findings around the figure” so the text and narration match it.</p>
+   </div>
+   <div class="edsec hidden" data-t="scr">
+    <p class="sub">What your AI voice will say. Edit freely; AI changes update these too.</p>
+    <div id="scrlist"></div>
+   </div>
+  </aside>
+ </div>
+</div>
 <script src="/lib/lame.min.js"></script>
+<script src="/lib/pdf.min.js"></script>
 <script>
 (()=>{
 "use strict";
@@ -372,6 +436,117 @@ const friendly=e=>{
   return esc(e&&e.message||"Something went wrong.");
 };
 
+
+/* ---------- review & edit screen (between drafting and recording) ---------- */
+const PANELS=["introduction","motivation","narrative","findings","methods","takeaway"];
+const PANEL_NAMES={introduction:"About the author",motivation:"Motivation",narrative:"Research narrative",findings:"Key findings",methods:"Methods",takeaway:"Takeaway"};
+const ED={poster:null,figs:{},history:[],resolve:null,reject:null,pdf:null,page:1,sel:null,spoken:""};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function setPath(o,path,val){const ks=path.split(".");let t=o;for(let i=0;i<ks.length-1;i++){const k=ks[i];if(t[k]==null)t[k]=/^\d+$/.test(ks[i+1])?[]:{};t=t[k];}t[ks[ks.length-1]]=val;}
+function sendPreview(changed,scrollTo){
+  const f=$("edframe").contentWindow;if(!f)return;
+  const figs={};for(const k in ED.figs)figs[k]=ED.figs[k].url;
+  f.postMessage({type:"fps-render",poster:ED.poster,displayName:$("dname").value.trim(),spokenName:ED.spoken,figures:figs,changed:changed||[],scrollTo:scrollTo||""},location.origin);
+}
+window.addEventListener("message",e=>{
+  if(e.origin!==location.origin||!e.data||!ED.poster)return;
+  if(e.data.type==="fps-ready")sendPreview();
+  if(e.data.type==="fps-edit"){
+    const path=String(e.data.path||""),val=String(e.data.value||"").slice(0,600);
+    if(path.startsWith("figures.")){const k=path.split(".")[1];if(ED.poster.figures&&ED.poster.figures[k])ED.poster.figures[k].caption=val.slice(0,200);renderFigList();}
+    else setPath(ED.poster,path,val);
+  }
+});
+function renderScripts(){
+  const box=$("scrlist");box.innerHTML="";const p=ED.poster;
+  const add=(label,val,set,cls)=>{const d=document.createElement("div");d.className="scr"+(cls?" "+cls:"");const h=document.createElement("div");h.className="h";h.textContent=label;const t=document.createElement("textarea");t.value=val||"";t.addEventListener("input",()=>set(t.value));d.append(h,t);box.append(d);};
+  const h3=t=>{const x=document.createElement("h3");x.textContent=t;x.style.cssText="font-size:14px;margin:6px 0 10px";box.append(x);};
+  h3("Panel narration");
+  PANELS.forEach(k=>add(PANEL_NAMES[k],p.scripts[k],v=>{p.scripts[k]=v;}));
+  const L=(p.podcast&&p.podcast.lines)||[];
+  if(L.length){h3("Podcast");L.forEach((l,i)=>add((l.speaker==="host"?(p.podcast.host||"Host"):ED.spoken)+" · "+(i+1),l.text,v=>{l.text=v;},"pod"));}
+}
+function renderFigList(){
+  const box=$("figlist");box.innerHTML="";
+  for(const k of Object.keys(ED.figs)){
+    const d=document.createElement("div");d.className="figitem";const im=document.createElement("img");im.src=ED.figs[k].url;
+    const t=document.createElement("span");t.textContent=PANEL_NAMES[k]+((ED.poster.figures[k]&&ED.poster.figures[k].caption)?": "+ED.poster.figures[k].caption:"");
+    const b=document.createElement("button");b.type="button";b.className="btn sec small";b.textContent="Remove";
+    b.onclick=()=>{delete ED.figs[k];delete ED.poster.figures[k];renderFigList();sendPreview([],k);};
+    d.append(im,t,b);box.append(d);
+  }
+}
+document.querySelectorAll(".edtabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".edtabs button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".edsec").forEach(x=>x.classList.toggle("hidden",x.dataset.t!==b.dataset.t));
+  if(b.dataset.t==="fig")openPdf();if(b.dataset.t==="scr")renderScripts();
+});
+/* Ask AI */
+$("edask").onclick=async()=>{
+  const req=$("edreq").value.trim();if(!req)return;
+  $("edask").disabled=true;$("edaimsg").className="edmsg";$("edaimsg").textContent="AI is rereading your paper and updating the poster… this usually takes about a minute.";
+  try{
+    const fd=new FormData();fd.append("pdf",paperFile,"paper.pdf");fd.append("poster",JSON.stringify(ED.poster));fd.append("request",req);fd.append("spoken",ED.spoken);
+    const d=await call("/api/revise",{method:"POST",body:fd});
+    const old=ED.poster,nw=d.poster;nw.figures=old.figures||{};
+    const changed=PANELS.filter(k=>JSON.stringify(old[k])!==JSON.stringify(nw[k])||old.scripts[k]!==nw.scripts[k]);
+    const podChanged=JSON.stringify(old.podcast)!==JSON.stringify(nw.podcast);
+    ED.history.push(old);ED.poster=nw;$("edundo").classList.remove("hidden");
+    sendPreview(changed,changed[0]);renderScripts();
+    $("edaimsg").className="edmsg ok";
+    $("edaimsg").textContent=changed.length||podChanged?"Updated: "+changed.map(k=>PANEL_NAMES[k]).concat(podChanged?["podcast script"]:[]).join(", ")+". Changed panels are outlined in orange. Check them against your paper.":"AI made no changes. Try describing the change more specifically.";
+    $("edreq").value="";
+  }catch(e){$("edaimsg").className="edmsg bad";$("edaimsg").innerHTML=friendly(e);}
+  $("edask").disabled=false;
+};
+$("edundo").onclick=()=>{const prev=ED.history.pop();if(!prev)return;ED.poster=prev;sendPreview();renderScripts();if(!ED.history.length)$("edundo").classList.add("hidden");$("edaimsg").className="edmsg";$("edaimsg").textContent="Undid the last AI change.";};
+/* Figures from the paper */
+async function openPdf(){
+  if(ED.pdf)return;
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc="/lib/pdf.worker.min.js";
+    ED.pdf=await pdfjsLib.getDocument({data:new Uint8Array(await paperFile.arrayBuffer())}).promise;ED.page=1;await showPage();
+  }catch(e){$("pgnum").textContent="Could not open the PDF here.";}
+}
+async function showPage(){
+  const pg=await ED.pdf.getPage(ED.page),vp=pg.getViewport({scale:1.4}),c=$("pgcan");
+  c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+  $("pgnum").textContent="Page "+ED.page+" / "+ED.pdf.numPages;ED.sel=null;$("pgsel").style.display="none";$("figadd").disabled=true;
+}
+$("pgprev").onclick=()=>{if(ED.pdf&&ED.page>1){ED.page--;showPage();}};
+$("pgnext").onclick=()=>{if(ED.pdf&&ED.page<ED.pdf.numPages){ED.page++;showPage();}};
+(()=>{let start=null;const w=$("pgwrap"),box=$("pgsel");
+  const pos=e=>{const r=w.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
+  const draw=(a,b)=>{const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),wd=Math.abs(a.x-b.x),ht=Math.abs(a.y-b.y);Object.assign(box.style,{display:"block",left:x*100+"%",top:y*100+"%",width:wd*100+"%",height:ht*100+"%"});return {x,y,w:wd,h:ht};};
+  w.addEventListener("pointerdown",e=>{if(!ED.pdf)return;start=pos(e);w.setPointerCapture(e.pointerId);});
+  w.addEventListener("pointermove",e=>{if(start)draw(start,pos(e));});
+  w.addEventListener("pointerup",e=>{if(!start)return;const s=draw(start,pos(e));start=null;ED.sel=s.w>0.03&&s.h>0.03?s:null;if(!ED.sel)box.style.display="none";$("figadd").disabled=!ED.sel;});
+})();
+$("figadd").onclick=async()=>{
+  if(!ED.sel||!ED.pdf)return;$("figadd").disabled=true;
+  const pg=await ED.pdf.getPage(ED.page),vp=pg.getViewport({scale:3}),big=document.createElement("canvas");big.width=vp.width;big.height=vp.height;
+  await pg.render({canvasContext:big.getContext("2d"),viewport:vp}).promise;
+  const s=ED.sel,cx=Math.round(s.x*big.width),cy=Math.round(s.y*big.height),cw=Math.round(s.w*big.width),ch=Math.round(s.h*big.height);
+  const sc=Math.min(1,1600/cw),out=document.createElement("canvas");out.width=Math.round(cw*sc);out.height=Math.round(ch*sc);
+  const g=out.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,out.width,out.height);g.drawImage(big,cx,cy,cw,ch,0,0,out.width,out.height);
+  const blob=await new Promise(r=>out.toBlob(r,"image/png"));const panel=$("figpanel").value;
+  ED.figs[panel]={blob,url:out.toDataURL("image/png")};
+  ED.poster.figures=ED.poster.figures||{};ED.poster.figures[panel]={caption:$("figcap").value.trim().slice(0,200)};
+  $("figcap").value="";ED.sel=null;$("pgsel").style.display="none";
+  renderFigList();sendPreview([panel],panel);
+};
+/* open / close */
+function reviewAndEdit(poster,spoken){
+  ED.poster=clone(poster);ED.poster.figures=ED.poster.figures||{};ED.figs={};ED.history=[];ED.spoken=spoken;ED.pdf=null;
+  $("edaimsg").textContent="";$("edreq").value="";$("edundo").classList.add("hidden");$("figlist").innerHTML="";
+  document.querySelectorAll(".edtabs button").forEach((x,i)=>x.classList.toggle("on",i===0));document.querySelectorAll(".edsec").forEach((x,i)=>x.classList.toggle("hidden",i!==0));
+  $("edframe").src="/p/editpreview?edit=1";$("editor").classList.remove("hidden");document.body.style.overflow="hidden";
+  return new Promise((res,rej)=>{ED.resolve=res;ED.reject=rej;});
+}
+function closeEditor(){$("editor").classList.add("hidden");document.body.style.overflow="";$("edframe").src="about:blank";}
+$("edok").onclick=()=>{const r=ED.resolve;ED.resolve=null;closeEditor();if(r)r({poster:ED.poster,figs:ED.figs});};
+$("edcancel").onclick=()=>{if(!confirm("Close the editor? Your draft and edits will be lost."))return;const r=ED.reject;ED.reject=null;closeEditor();if(r)r({message:"Cancelled. Nothing was recorded.",cancelled:true});};
+
 $("build").onclick=async()=>{
   if(building)return;building=true;check();
   $("builderr").classList.add("hidden");$("builddone").classList.add("hidden");$("log").classList.remove("hidden");
@@ -382,7 +557,10 @@ $("build").onclick=async()=>{
     await call("/api/me");  // refresh this browser's owner cookie before building
     const notes={"x-introduction":encodeURIComponent($("intro").value.trim().slice(0,1200)),"x-motivation":encodeURIComponent($("motiv").value.trim().slice(0,1200))};
     const d=await call("/api/draft?spoken="+encodeURIComponent(spoken)+"&display="+encodeURIComponent($("dname").value.trim())+"&filename="+encodeURIComponent(paperFile.name),{method:"POST",headers:{"content-type":"application/pdf",...notes},body:paperFile});
-    const poster=d.poster;step("poster","done");
+    step("poster","done");
+    cur="review";step("review","on");
+    const ed=await reviewAndEdit(d.poster,spoken);const poster=ed.poster;
+    step("review","done");
 
     cur="sample";step("sample","on");
     const blob=await voiceSample();
@@ -412,6 +590,9 @@ $("build").onclick=async()=>{
     }
     step("pod","done","("+L.length+"/"+L.length+")");
 
+    for(const [k,f] of Object.entries(ed.figs)){   // figures cropped from the paper
+      await call("/api/figure?voice_id="+encodeURIComponent(v.voice_id)+"&voice_token="+encodeURIComponent(v.voice_token)+"&slug="+encodeURIComponent(v.slug)+"&panel="+k,{method:"POST",headers:{"content-type":"image/png"},body:f.blob});
+    }
     cur="avatar";
     if(photoBlob){
       step("avatar","on");
