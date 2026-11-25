@@ -54,6 +54,9 @@ input[type=text]{box-sizing:border-box;width:100%;font:inherit;font-size:15px;ba
 .scr{margin-bottom:14px}.scr .h{font-size:13px;font-weight:600;color:#374151;margin-bottom:4px}
 .scr textarea{min-height:70px;font-size:14px}
 .scr.pod textarea{min-height:44px}
+#gallery a{position:relative}
+.ged{position:absolute;top:8px;right:8px;font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;opacity:0;transition:opacity .15s}
+#gallery a:hover .ged{opacity:1}.ged:hover{background:#dbeafe}
 .photo{display:flex;gap:14px;align-items:flex-start}
 .photo img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;flex:0 0 auto}
 textarea{box-sizing:border-box;width:100%;font:inherit;font-size:15px;line-height:1.5;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;resize:vertical;min-height:96px;transition:border-color .15s, box-shadow .15s}
@@ -206,6 +209,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
    </div>
    <div class="edsec hidden" data-t="fig">
     <p class="sub">Show a figure exactly as it appears in your paper. Find the page, drag a box around the figure, choose the panel, and place it.</p>
+    <div id="figpdfbox" class="hidden" style="margin-bottom:12px"><label class="f" for="figpdf" style="margin-top:0">Your paper PDF</label><input type="file" id="figpdf" accept="application/pdf"></div>
     <div class="pgnav"><button class="btn sec small" type="button" id="pgprev">◀ Prev</button><span id="pgnum">Loading…</span><button class="btn sec small" type="button" id="pgnext">Next ▶</button></div>
     <div class="pgwrap" id="pgwrap"><canvas id="pgcan"></canvas><div id="pgsel"></div></div>
     <label class="f" for="figpanel">Panel</label>
@@ -217,7 +221,7 @@ code.k{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px
     <p class="sub" style="margin-top:14px">Tip: after placing a figure, update that panel's text here on the poster and its narration in the <b>Scripts</b> tab so they describe the figure.</p>
    </div>
    <div class="edsec hidden" data-t="scr">
-    <p class="sub">What your AI voice will say. Edit freely; AI changes update these too.</p>
+    <p class="sub" id="scrnote">What your AI voice will say. Edit it so it matches the poster.</p>
     <div id="scrlist"></div>
    </div>
   </aside>
@@ -445,13 +449,13 @@ const friendly=e=>{
 /* ---------- review & edit screen (between drafting and recording) ---------- */
 const PANELS=["introduction","motivation","narrative","findings","methods","takeaway"];
 const PANEL_NAMES={introduction:"About the author",motivation:"Motivation",narrative:"Research narrative",findings:"Key findings",methods:"Methods",takeaway:"Takeaway"};
-const ED={poster:null,figs:{},history:[],resolve:null,reject:null,pdf:null,page:1,sel:null,spoken:""};
+const ED={poster:null,figs:{},history:[],resolve:null,reject:null,pdf:null,page:1,sel:null,spoken:"",existing:null,displayName:""};
 const clone=o=>JSON.parse(JSON.stringify(o));
 function setPath(o,path,val){const ks=path.split(".");let t=o;for(let i=0;i<ks.length-1;i++){const k=ks[i];if(t[k]==null)t[k]=/^\d+$/.test(ks[i+1])?[]:{};t=t[k];}t[ks[ks.length-1]]=val;}
 function sendPreview(changed,scrollTo){
   const f=$("edframe").contentWindow;if(!f)return;
   const figs={};for(const k in ED.figs)figs[k]=ED.figs[k].url;
-  f.postMessage({type:"fps-render",poster:ED.poster,displayName:$("dname").value.trim(),spokenName:ED.spoken,figures:figs,changed:changed||[],scrollTo:scrollTo||""},location.origin);
+  f.postMessage({type:"fps-render",poster:ED.poster,displayName:ED.displayName||$("dname").value.trim(),spokenName:ED.spoken,figures:figs,changed:changed||[],scrollTo:scrollTo||""},location.origin);
 }
 window.addEventListener("message",e=>{
   if(e.origin!==location.origin||!e.data||!ED.poster)return;
@@ -465,7 +469,7 @@ window.addEventListener("message",e=>{
 });
 function renderScripts(){
   const box=$("scrlist");box.innerHTML="";const p=ED.poster;
-  const add=(label,val,set,cls)=>{const d=document.createElement("div");d.className="scr"+(cls?" "+cls:"");const h=document.createElement("div");h.className="h";h.textContent=label;const t=document.createElement("textarea");t.value=val||"";t.addEventListener("input",()=>set(t.value));d.append(h,t);box.append(d);};
+  const add=(label,val,set,cls)=>{const d=document.createElement("div");d.className="scr"+(cls?" "+cls:"");const h=document.createElement("div");h.className="h";h.textContent=label;const t=document.createElement("textarea");t.value=val||"";if(ED.existing)t.readOnly=true;else t.addEventListener("input",()=>set(t.value));d.append(h,t);box.append(d);};
   const h3=t=>{const x=document.createElement("h3");x.textContent=t;x.style.cssText="font-size:14px;margin:6px 0 10px";box.append(x);};
   h3("Panel narration");
   PANELS.forEach(k=>add(PANEL_NAMES[k],p.scripts[k],v=>{p.scripts[k]=v;}));
@@ -507,7 +511,9 @@ async function openPdf(){
   if(ED.pdf)return;
   try{
     pdfjsLib.GlobalWorkerOptions.workerSrc="/lib/pdf.worker.min.js";
-    ED.pdf=await pdfjsLib.getDocument({data:new Uint8Array(await paperFile.arrayBuffer())}).promise;ED.page=1;await showPage();
+    const src=paperFile||($("figpdf").files&&$("figpdf").files[0]);
+    if(!src){$("pgnum").textContent="Choose your paper PDF above.";return;}
+    ED.pdf=await pdfjsLib.getDocument({data:new Uint8Array(await src.arrayBuffer())}).promise;ED.page=1;await showPage();
   }catch(e){$("pgnum").textContent="Could not open the PDF here.";}
 }
 async function showPage(){
@@ -515,6 +521,7 @@ async function showPage(){
   c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
   $("pgnum").textContent="Page "+ED.page+" / "+ED.pdf.numPages;ED.sel=null;$("pgsel").style.display="none";$("figadd").disabled=true;
 }
+$("figpdf").addEventListener("change",()=>{ED.pdf=null;openPdf();});
 $("pgprev").onclick=()=>{if(ED.pdf&&ED.page>1){ED.page--;showPage();}};
 $("pgnext").onclick=()=>{if(ED.pdf&&ED.page<ED.pdf.numPages){ED.page++;showPage();}};
 (()=>{let start=null;const w=$("pgwrap"),box=$("pgsel");
@@ -538,9 +545,15 @@ $("figadd").onclick=async()=>{
   renderFigList();sendPreview([panel],panel);
 };
 /* open / close */
-function reviewAndEdit(poster,spoken){
+function reviewAndEdit(poster,spoken,opts={}){
   ED.poster=clone(poster);ED.poster.figures=ED.poster.figures||{};ED.figs={};ED.history=[];ED.spoken=spoken;ED.pdf=null;
-  $("figlist").innerHTML="";
+  ED.existing=opts.existing||null;ED.displayName=opts.displayName||"";
+  if(ED.existing)for(const k of Object.keys(ED.poster.figures))ED.figs[k]={url:"/figure/"+ED.existing+"/"+k+".png"};   // figures already saved
+  renderFigList();
+  $("figpdfbox").classList.toggle("hidden",!!paperFile||!ED.existing);
+  $("scrnote").textContent=ED.existing?"What the recorded voice says. Recordings are not redone when you edit a finished poster, so these can't be changed here.":"What your AI voice will say. Edit it so it matches the poster.";
+  $("edok").textContent=ED.existing?"Save changes":"Looks good: record voice and save";
+  document.querySelector("#editor .edbar .muted").textContent=ED.existing?"Editing a finished poster. Narration and podcast audio stay as recorded.":"Nothing is recorded yet. Recording starts when you click the button on the right.";
   document.querySelectorAll(".edtabs button").forEach((x,i)=>x.classList.toggle("on",i===0));document.querySelectorAll(".edsec").forEach((x,i)=>x.classList.toggle("hidden",i!==0));
   $("edframe").src="/p/editpreview?edit=1";$("editor").classList.remove("hidden");document.body.style.overflow="hidden";
   return new Promise((res,rej)=>{ED.resolve=res;ED.reject=rej;});
@@ -548,6 +561,24 @@ function reviewAndEdit(poster,spoken){
 function closeEditor(){$("editor").classList.add("hidden");document.body.style.overflow="";$("edframe").src="about:blank";}
 $("edok").onclick=()=>{const r=ED.resolve;ED.resolve=null;closeEditor();if(r)r({poster:ED.poster,figs:ED.figs});};
 $("edcancel").onclick=()=>{if(!confirm("Close the editor? Your draft and edits will be lost."))return;const r=ED.reject;ED.reject=null;closeEditor();if(r)r({message:"Cancelled. Nothing was recorded.",cancelled:true});};
+
+/* edit a finished poster: /?edit=<slug> (no AI or voice calls) */
+async function editExisting(slug){
+  let v;try{v=await call("/api/posters/"+slug);}catch(e){alert(e.message||"Could not load that poster.");return;}
+  await call("/api/me").catch(()=>{});
+  let res;try{res=await reviewAndEdit(v.poster,v.spokenName||v.displayName,{existing:slug,displayName:v.displayName});}catch(e){history.replaceState(null,"",location.pathname);return;}
+  let admin="";
+  let tries=0;
+  const send=async(path,opts)=>{for(;;){try{return await call(path,{...opts,headers:{...(opts.headers||{}),...(admin?{"x-admin-code":admin}:{})}});}
+    catch(e){if(e.code==="not_owner"&&tries<2){tries++;const c=prompt((admin?"That code didn't work. ":"This poster was made in another browser. ")+"Enter the admin code to save your changes:");if(!c)throw {message:"Not saved."};admin=c.trim();continue;}
+      if(e.code==="not_owner")throw {message:"Not saved: the admin code didn't match."};throw e;}}};
+  try{
+    for(const [k,f] of Object.entries(res.figs))if(f.blob)await send("/api/figure?slug="+slug+"&panel="+k,{method:"POST",headers:{"content-type":"image/png"},body:f.blob});
+    await send("/api/poster-update",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug,poster:res.poster})});
+    if(confirm("Saved. Open the poster?"))location.href="/p/"+slug;else history.replaceState(null,"",location.pathname);
+  }catch(e){alert((e&&e.message)||"Could not save.");history.replaceState(null,"",location.pathname);}
+}
+{const es=new URLSearchParams(location.search).get("edit");if(es&&/^[a-z0-9]{6,20}$/.test(es))editExisting(es);}
 
 $("build").onclick=async()=>{
   if(building)return;building=true;check();
@@ -621,7 +652,8 @@ async function loadGallery(){
   const g=$("gallery");
   try{const d=await call("/api/posters");g.innerHTML="";
     if(!d.posters.length){g.innerHTML='<span class="muted">No posters yet. Yours could be the first.</span>';return;}
-    d.posters.forEach(p=>{const a=document.createElement("a");a.href="/p/"+p.slug;const t=document.createElement("div");t.className="t";t.textContent=p.title||"Untitled";const w=document.createElement("div");w.className="w";w.textContent=p.displayName||"";a.append(t,w);g.appendChild(a);});
+    d.posters.forEach(p=>{const a=document.createElement("a");a.href="/p/"+p.slug;const t=document.createElement("div");t.className="t";t.textContent=p.title||"Untitled";const w=document.createElement("div");w.className="w";w.textContent=p.displayName||"";const ed=document.createElement("span");ed.className="ged";ed.textContent="Edit";ed.title="Edit this poster (no re-recording)";
+      ed.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();history.replaceState(null,"","/?edit="+p.slug);editExisting(p.slug);});a.append(t,w,ed);g.appendChild(a);});
   }catch(e){g.innerHTML='<span class="muted">Could not load posters.</span>';}
 }
 

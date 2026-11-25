@@ -474,10 +474,32 @@ async function api(request, env, url) {
     });
   }
 
+  /* editing a finished poster: the browser that made it, or anyone with the ADMIN_CODE secret */
+  const canEdit = async slug => (env.ADMIN_CODE && (request.headers.get("x-admin-code") || "") === env.ADMIN_CODE) || ownedSlugs(await env.POSTERS.get(ownerKey(ownerId))).includes(slug);
+
+  /* save edits to a finished poster (text, icons, items, figures). Audio is not re-recorded, so scripts and podcast stay as they are. */
+  if (p === "/api/poster-update" && method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const slug = String(b.slug || "");
+    if (!/^[a-z0-9]{6,20}$/.test(slug)) return err(400, "Bad request.", "bad_request");
+    const v = await env.POSTERS.get("poster:" + slug, "json");
+    if (!v) return err(404, "Poster not found.", "not_found");
+    if (!(await canEdit(slug))) return err(403, "Only the browser that made this poster, or the admin code, can edit it.", "not_owner");
+    const old = v.poster;
+    let poster;
+    try { poster = cleanPoster({ ...(b.poster || {}), scripts: old.scripts, podcast: old.podcast, brief: old.brief, suggested: old.suggested }, old.podcast && old.podcast.hostKey); }
+    catch (e) { return err(400, "This poster was made with an older version of the studio and can't be edited here.", "old_poster"); }
+    for (const k of Object.keys(poster.figures)) if (!(await env.POSTERS.get(`figure:${slug}:${k}`, "stream"))) delete poster.figures[k];
+    v.poster = poster; v.updatedAt = Date.now();
+    await env.POSTERS.put("poster:" + slug, JSON.stringify(v), { metadata: { title: poster.title.slice(0, 200), displayName: v.displayName, createdAt: v.createdAt } });
+    return json({ ok: true, slug });
+  }
+
   /* a figure the author cropped from the paper, stored with the poster */
   if (p === "/api/figure" && method === "POST") {
     const voice_id = url.searchParams.get("voice_id") || "", slug = url.searchParams.get("slug") || "", panel = url.searchParams.get("panel") || "";
-    if (!/^[A-Za-z0-9]{8,64}$/.test(voice_id) || url.searchParams.get("voice_token") !== await hmac(env, "voice:" + voice_id)) return err(403, "This voice can't be used here.", "bad_voice");
+    const viaVoice = /^[A-Za-z0-9]{8,64}$/.test(voice_id) && url.searchParams.get("voice_token") === await hmac(env, "voice:" + voice_id);
+    if (!viaVoice && !(await env.POSTERS.get("poster:" + slug) && await canEdit(slug))) return err(403, "You can't add figures to this poster.", "not_owner");
     if (!/^[a-z0-9]{6,20}$/.test(slug) || !FIGURE_PANELS.includes(panel)) return err(400, "Bad request.", "bad_request");
     const type = (request.headers.get("content-type") || "").split(";")[0].trim();
     if (!/^image\/(png|jpeg|webp)$/.test(type)) return err(400, "Figures must be PNG, JPEG or WebP.", "bad_figure");
