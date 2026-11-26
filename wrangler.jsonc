@@ -19,7 +19,7 @@
     "OPENAI_CHAT_MODEL": "gpt-6-luna",
     "OPENAI_REASONING": "medium",
     "PDF_DETAIL": "low",
-    "MODEL_ID": "eleven_v3",
+    "MODEL_ID": "eleven_v4",
     "DAILY_BUILD_LIMIT": "20",
     "HOST_VOICE_ID": "",
     // Testing: "true" keeps voice clones in ElevenLabs; set back to "false" to delete them after each build.
@@ -33,9 +33,9 @@
     "HOST_AC_MODEL_ID": "",
     "HOST_HUN_MODEL_ID": "",
     // Voice settings for every clone: higher similarity keeps each speaker's own accent.
-    "VOICE_STABILITY": "0.85",
+    "VOICE_STABILITY": "0.5",
     // Audio quality from ElevenLabs. 128 kbps matches website downloads; mp3_44100_192 needs a Creator plan or higher.
     "OUTPUT_FORMAT": "mp3_44100_128",
-    "VOICE_SIMILARITY": "0.9"
+    "VOICE_SIMILARITY": "0.75"
   }
 }

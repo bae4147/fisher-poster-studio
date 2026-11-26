@@ -74,8 +74,8 @@
         <label>Clones</label>
         <div id="rbvoices" style="display:flex;flex-direction:column;gap:6px;font-weight:400"></div>
         <div style="display:flex;gap:12px">
-          <div style="flex:1"><label for="rbmodel">Model</label><select id="rbmodel"><option value="eleven_v3">eleven_v3</option><option value="eleven_multilingual_v2">eleven_multilingual_v2</option><option value="eleven_turbo_v2_5">eleven_turbo_v2_5</option><option value="eleven_flash_v2_5">eleven_flash_v2_5</option></select></div>
-          <div style="flex:1"><label for="rbstab">Stability</label><select id="rbstab"><option>0.5</option><option>0.7</option><option selected>0.85</option><option>1.0</option></select></div>
+          <div style="flex:1"><label for="rbmodel">Model</label><select id="rbmodel"><option value="eleven_v4">eleven_v4</option><option value="eleven_v3">eleven_v3</option><option value="eleven_multilingual_v2">eleven_multilingual_v2</option><option value="eleven_turbo_v2_5">eleven_turbo_v2_5</option><option value="eleven_flash_v2_5">eleven_flash_v2_5</option></select></div>
+          <div style="flex:1"><label for="rbstab">Stability</label><select id="rbstab"><option selected>0.5</option><option>0.7</option><option>0.85</option><option>1.0</option></select></div>
           <div style="flex:1"><label for="rbrep">Repeats</label><select id="rbrep"><option>1</option><option selected>2</option><option>3</option></select></div>
         </div>
         <label for="rbtexts">Test passages (one per line)</label>
@@ -120,7 +120,7 @@ document.getElementById("rbgo").addEventListener("click",async()=>{
       const players=document.createElement("div");players.style.cssText="display:flex;flex-wrap:wrap;gap:8px";row.append(players);out.append(row);
       for(let k=0;k<rep;k++){
         const cell=document.createElement("div");cell.style.cssText="display:flex;flex-direction:column;font-size:12px;color:#6b7280";cell.textContent="Take "+(k+1);players.append(cell);
-        try{const r=await fetch("/api/voicelab",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-admin-code":vlAdmin()},body:JSON.stringify({voice_id:v.id,text:t,model,stability:stab,similarity:0.9,seed:1000+k*7919})});
+        try{const r=await fetch("/api/voicelab",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-admin-code":vlAdmin()},body:JSON.stringify({voice_id:v.id,text:t,model,stability:stab,similarity:0.75,seed:1000+k*7919})});
           if(!r.ok){const d=await r.json().catch(()=>({}));throw (d.error||{message:"Failed ("+r.status+")"});}
           const a=document.createElement("audio");a.controls=true;a.style.width="250px";a.src=URL.createObjectURL(await r.blob());cell.append(a);}
         catch(e){const x=document.createElement("span");x.style.color="#b91c1c";x.textContent=e.message||"Failed";cell.append(x);}
@@ -130,8 +130,8 @@ document.getElementById("rbgo").addEventListener("click",async()=>{
   btn.disabled=false;
 });
 /* voice lab */
-const VL_MODELS=[["eleven_multilingual_v2","Multilingual v2",true],["eleven_turbo_v2_5","Turbo v2.5",true],["eleven_flash_v2_5","Flash v2.5",false],["eleven_v3","v3 (current default)",true]];
-const VL_STABS=[["0.5",false],["0.7",true],["0.85",true]];
+const VL_MODELS=[["eleven_v4","v4 (current default)",true],["eleven_v3","v3",true],["eleven_multilingual_v2","Multilingual v2",false],["eleven_turbo_v2_5","Turbo v2.5",false],["eleven_flash_v2_5","Flash v2.5",false]];
+const VL_STABS=[["0.5",true],["0.7",false],["0.85",true]];
 const vlAdmin=()=>document.getElementById("code").value.trim();
 VL_MODELS.forEach(([id,label,on])=>{const l=document.createElement("label");l.style.cssText="display:flex;gap:6px;align-items:center;margin:0;font-weight:400";l.innerHTML='<input type="checkbox" value="'+id+'"'+(on?" checked":"")+'> '+label;document.getElementById("vlmodels").append(l);});
 VL_STABS.forEach(([v,on])=>{const l=document.createElement("label");l.style.cssText="display:flex;gap:6px;align-items:center;margin:0;font-weight:400";l.innerHTML='<input type="checkbox" value="'+v+'"'+(on?" checked":"")+'> '+v;document.getElementById("vlstabs").append(l);});
@@ -150,7 +150,7 @@ document.getElementById("vlgo").addEventListener("click",async()=>{
   for(const m of models)for(const st of stabs){
     const row=document.createElement("div");row.style.cssText="display:flex;gap:12px;align-items:center;border-top:1px solid #e5e7eb;padding:8px 0";
     const t=document.createElement("div");t.style.cssText="width:220px;font-size:13.5px";t.textContent=m+" · stability "+st;row.append(t);out.append(row);
-    try{const r=await fetch("/api/voicelab",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-admin-code":vlAdmin()},body:JSON.stringify({voice_id:document.getElementById("vlvoice").value,text:document.getElementById("vltext").value,model:m,stability:st,similarity:0.9,seed:12345})});
+    try{const r=await fetch("/api/voicelab",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-admin-code":vlAdmin()},body:JSON.stringify({voice_id:document.getElementById("vlvoice").value,text:document.getElementById("vltext").value,model:m,stability:st,similarity:0.75,seed:12345})});
       if(!r.ok){const d=await r.json().catch(()=>({}));throw (d.error||{message:"Failed ("+r.status+")"});}
       const a=document.createElement("audio");a.controls=true;a.src=URL.createObjectURL(await r.blob());row.append(a);}
     catch(e){const x=document.createElement("span");x.style.color="#b91c1c";x.style.fontSize="13px";x.textContent=e.message||"Failed";row.append(x);}

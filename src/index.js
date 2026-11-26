@@ -303,7 +303,7 @@ async function deleteVoice(env, voiceId) {
 }
 /* Cloned voices keep the speaker's own accent better with high similarity and speaker boost.
    ctx.model overrides the model (per-host setting); models that accept a language code are told it is English. */
-const LANG_CODE_MODELS = /^(eleven_turbo_v2_5|eleven_flash_v2_5|eleven_v3)/;
+const LANG_CODE_MODELS = /^(eleven_turbo_v2_5|eleven_flash_v2_5|eleven_v3|eleven_v4)/;
 /* Consistency across a poster's recordings:
    - a fixed seed per poster (ctx.seed) so generations vary less;
    - request stitching (ctx.prev_ids): ElevenLabs continues from the earlier recordings in the same voice;
