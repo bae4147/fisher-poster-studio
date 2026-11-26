@@ -567,10 +567,11 @@ async function api(request, env, url) {
       return json({ voices, current: { model: env.MODEL_ID || "eleven_multilingual_v2", stability: Number(env.VOICE_STABILITY ?? 0.7), similarity: Number(env.VOICE_SIMILARITY ?? 0.9) } });
     }
     let b = {}; try { b = await request.json(); } catch {}
-    const text = String(b.text || "").trim().slice(0, 300);
+    const text = String(b.text || "").trim().slice(0, 1200);
     if (!/^[A-Za-z0-9]{8,64}$/.test(b.voice_id || "") || !text || !/^eleven_[a-z0-9_]{2,40}$/.test(b.model || "")) return err(400, "Bad request.", "bad_request");
     try {
-      const audio = await tts(env, b.voice_id, text, { model: b.model, stability: Math.min(1, Math.max(0, Number(b.stability))), similarity: Math.min(1, Math.max(0, Number(b.similarity))), seed: 12345 });
+      const seed = Number.isInteger(b.seed) && b.seed >= 0 && b.seed < 4294967295 ? b.seed : undefined;
+      const audio = await tts(env, b.voice_id, text, { model: b.model, stability: Math.min(1, Math.max(0, Number(b.stability))), similarity: Math.min(1, Math.max(0, Number(b.similarity))), seed });
       return new Response(audio, { headers: { "content-type": "audio/mpeg", "cache-control": "no-store" } });
     } catch (e) { return err(502, e.message || "ElevenLabs failed.", "upstream"); }
   }
