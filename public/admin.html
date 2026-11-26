@@ -83,7 +83,7 @@ const $=id=>document.getElementById(id);let blob=null;
 async function showCurrent(){for(const h of ["ac","hun"]){let look=null;try{const r=await fetch("/avatar/host-"+h+".json?t="+Date.now());if(r.ok)look=await r.json();}catch(e){}$("cur-"+h).innerHTML=spriteSVG(look||{});}}
 showCurrent();
 /* voice lab */
-const VL_MODELS=[["eleven_multilingual_v2","Multilingual v2 (current default)",true],["eleven_turbo_v2_5","Turbo v2.5",true],["eleven_flash_v2_5","Flash v2.5",false],["eleven_v3","v3",true]];
+const VL_MODELS=[["eleven_multilingual_v2","Multilingual v2",true],["eleven_turbo_v2_5","Turbo v2.5",true],["eleven_flash_v2_5","Flash v2.5",false],["eleven_v3","v3 (current default)",true]];
 const VL_STABS=[["0.5",false],["0.7",true],["0.85",true]];
 const vlAdmin=()=>document.getElementById("code").value.trim();
 VL_MODELS.forEach(([id,label,on])=>{const l=document.createElement("label");l.style.cssText="display:flex;gap:6px;align-items:center;margin:0;font-weight:400";l.innerHTML='<input type="checkbox" value="'+id+'"'+(on?" checked":"")+'> '+label;document.getElementById("vlmodels").append(l);});

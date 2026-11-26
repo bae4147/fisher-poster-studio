@@ -321,7 +321,8 @@ async function tts(env, voiceId, text, ctx = {}) {
       ...(LANG_CODE_MODELS.test(model) ? { language_code: "en" } : {}),
       ...(Number.isInteger(ctx.seed) ? { seed: ctx.seed } : {}),
       ...(stitch ? { previous_request_ids: ids } : {}),
-      ...(!stitch && ctx.previous_text ? { previous_text: ctx.previous_text.slice(-600) } : {}), ...(!stitch && ctx.next_text ? { next_text: ctx.next_text.slice(0, 600) } : {}) })
+      ...(!stitch && ctx.previous_text && STITCH_MODELS.test(model) ? { previous_text: ctx.previous_text.slice(-600) } : {}),
+      ...(!stitch && ctx.next_text && STITCH_MODELS.test(model) ? { next_text: ctx.next_text.slice(0, 600) } : {}) })   // context text only on models that take it (not v3)
   });
   if (!res.ok) throw new UpstreamError(await upstreamMessage(res, "ElevenLabs"), "upstream");
   if (ctx.meta) ctx.meta.requestId = res.headers.get("request-id") || "";
