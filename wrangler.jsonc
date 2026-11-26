@@ -34,6 +34,8 @@
     "HOST_HUN_MODEL_ID": "",
     // Voice settings for every clone: higher similarity keeps each speaker's own accent.
     "VOICE_STABILITY": "0.85",
+    // Audio quality from ElevenLabs. 128 kbps matches website downloads; mp3_44100_192 needs a Creator plan or higher.
+    "OUTPUT_FORMAT": "mp3_44100_128",
     "VOICE_SIMILARITY": "0.9"
   }
 }

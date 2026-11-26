@@ -314,7 +314,7 @@ async function tts(env, voiceId, text, ctx = {}) {
   const model = ctx.model || env.MODEL_ID || "eleven_multilingual_v2";
   const ids = (Array.isArray(ctx.prev_ids) ? ctx.prev_ids : []).filter(x => /^[\w-]{6,80}$/.test(String(x))).slice(-3);
   const stitch = ids.length && STITCH_MODELS.test(model);
-  const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
+  const res = await fetch(`${elevenBase(env)}/v1/text-to-speech/${voiceId}?output_format=${/^mp3_\d+_\d+$/.test(env.OUTPUT_FORMAT || "") ? env.OUTPUT_FORMAT : "mp3_44100_128"}`, {   // 128 kbps, like files downloaded from the ElevenLabs website
     method: "POST", headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
     body: JSON.stringify({ text, model_id: model,
       voice_settings: { stability: Number(ctx.stability ?? env.VOICE_STABILITY ?? 0.7), similarity_boost: Number(ctx.similarity ?? env.VOICE_SIMILARITY ?? 0.9), use_speaker_boost: true },
